@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+pydantic
+httpx
+
+# Azure SDKs
+openai
+azure-search-documents
+azure-identity
