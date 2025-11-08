@@ -3,9 +3,11 @@ import json
 from typing import List, Dict, Optional
 from openai import AzureOpenAI
 import sys
+import requests
+import xml.etree.ElementTree as ET
 sys.path.append('.')
-from backend.services.azure_search_service import AzureSearchService
-from backend.services.location_service import LocationService
+from .azure_search_service import AzureSearchService
+from .location_service import LocationService
 
 class AzureOpenAIService:
     def __init__(self):
@@ -54,6 +56,23 @@ class AzureOpenAIService:
         Antworte auf Deutsch, präzise und hilfreich."""
 
     def _get_tools(self) -> List[Dict]:
+        map_id = []
+        url = "https://map.geo.lu.ch/feed.xml"
+        r = requests.get(url, timeout=20)
+        r.raise_for_status()
+
+        root = ET.fromstring(r.content)
+
+        links = []
+        for item in root.findall(".//item/link"):
+            link_text = item.text.strip()
+            if "map.geo.lu.ch" in link_text:
+                path = link_text.split("map.geo.lu.ch", 1)[1]
+                links.append(path)
+
+        for l in links:
+            map_id.append(l)
+        
         return [
             {
                 "type": "function",
@@ -109,8 +128,8 @@ class AzureOpenAIService:
                         "properties": {
                             "map_id": {
                                 "type": "string",
-                                "description": "ID der Webkarte. Verwende 'grundbuchplan' für allgemeine Karten, 'oberflaechengewaesser' für Gewässer.",
-                                "default": "grundbuchplan"
+                                "description": f"ID der Webkarte. Standard ist 'objekte/grundbuchplan'. Wenn du aber eine spezifischere Karte findest, nutze stattdessen die passende aus der Liste: {map_id}. Überprüfe das Array und wähle immer die thematisch treffendste Karte statt nur den Standard.",
+                                "default": "objekte/grundbuchplan"
                             },
                             "coords": {
                                 "type": "object",
@@ -203,7 +222,7 @@ class AzureOpenAIService:
                     return json.dumps(formatted, ensure_ascii=False, indent=2)
                     
                 except Exception as e:
-                    logger.error(f"Location resolution error: {e}")
+                    
                     return json.dumps({
                         "status": "error",
                         "message": f"Fehler bei der Ortssuche: {str(e)}",
@@ -211,7 +230,7 @@ class AzureOpenAIService:
                     }, ensure_ascii=False)
             
             elif tool_name == "generate_map_url":
-                map_id = arguments.get("map_id", "grundbuchplan")
+                map_id = arguments.get("map_id", "/objekte/grundbuchplan/")
                 coords_dict = arguments.get("coords")
                 coords = (coords_dict['x'], coords_dict['y'])
                 url = self.location_service.generate_map_url(map_id, coords)

@@ -1,11 +1,16 @@
 import httpx
 from typing import Optional, Dict, List, Tuple
 import logging
-
+import requests
+import xml.etree.ElementTree as ET
 logger = logging.getLogger(__name__)
 
 class LocationService:
-    BASE_URL = "https://svc.geo.lu.ch/locationfinder/api/v1/lookup"
+    #Luzerner API
+    BASE_URL = "https://svc.geo.lu.ch/locationfinder/api/v1/lookup" 
+    
+
+
     
     async def resolve_location(
         self, 
@@ -65,7 +70,7 @@ class LocationService:
     
     def generate_map_url(
         self, 
-        map_id: str, 
+        map_id: List, 
         coords: Tuple[float, float], 
         add_marker: bool = True
     ) -> str:
@@ -73,7 +78,7 @@ class LocationService:
         Generate webmap URL with coordinates
         
         Args:
-            map_id: Map identifier (e.g., 'grundbuchplan', 'oberflaechengewaesser')
+            map_id: Map identifier 
             coords: Tuple of (x, y) coordinates in LV95
             add_marker: Whether to add a marker at the location
         
@@ -81,13 +86,17 @@ class LocationService:
             URL to the webmap
         """
         cx, cy = coords
+
+      
+     
         
         # Round coordinates to integers
         cx = int(round(cx))
         cy = int(round(cy))
         
         # Build URL - format: https://map.geo.lu.ch/{map_id}?FOCUS=x:y:zoom&marker
-        url = f"https://map.geo.lu.ch/{map_id}?FOCUS={cx}:{cy}:4515"
+        url = f"https://map.geo.lu.ch{map_id}?FOCUS={cx}:{cy}:4515"
+       
         
         if add_marker:
             url += "&marker"

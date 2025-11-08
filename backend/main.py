@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from backend.services.azure_openai_service import AzureOpenAIService
+from services.azure_openai_service import AzureOpenAIService
 
 app = FastAPI(
     title="Geoportal Chatbot API",
@@ -121,4 +121,4 @@ if __name__ == "__main__":
     print("🚀 Starting Geoportal Chatbot API...")
     print("📍 API will be available at: http://localhost:8000")
     print("📚 API docs at: http://localhost:8000/docs")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000,reload=True)
