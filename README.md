@@ -11,6 +11,7 @@ Geopard is an AI-powered assistant that helps users find, understand, and access
 - **🔍 Smart Search** - Semantic search across 500+ geodata datasets
 - **💬 Natural Language Q&A** - Ask questions in German, get precise answers with citations
 - **📍 Location Intelligence** - Find places, coordinates, and spatial context
+- **⛰️ Elevation Queries** - Get height above sea level for any location in Switzerland
 - **🗺️ Interactive Maps** - Generate direct links to webmaps with zoom and markers
 - **🎯 Auto Zoom & Markers** - Ask about a place and the map automatically zooms there with a marker
 - **🌐 Web Interface** - User-friendly chat interface with map integration
@@ -148,8 +149,10 @@ Hack-Stair-AIML-1/
 - **Indexed**: ~500 datasets from Canton Luzern
 
 ### Location Tools (`location-tools/`)
-- **API**: LocationFinder API integration
-- **Features**: Address lookup, coordinate conversion, map URL generation
+- **LocationFinder API**: Address lookup, coordinate conversion
+- **Height Queries**: Access to Swiss elevation data (swissALTI3D)
+- **Coordinate Transformation**: WGS84 ↔ Swiss LV95 conversion
+- **Map Generation**: Interactive webmap URLs with zoom and markers
 - **Supports**: Addresses, place names, EGID, EGRID, parcel numbers
 
 ### Web Interface (`frontend/`)
@@ -163,6 +166,10 @@ Hack-Stair-AIML-1/
 "Welche Höhendaten gibt es im Kanton Luzern?"
 → Returns DOM and DTM datasets with metadata and download links
 
+"Auf welcher Höhe liegt der Bahnhof Luzern?"
+→ Returns: "Der Bahnhof Luzern liegt auf einer Höhe von 436.1 m ü. M."
+   with webmap link showing the location
+
 "Zeige mir die Wildruhezonen in Emmen auf einer Karte"
 → Finds dataset + location + generates interactive map URL
 
@@ -175,7 +182,7 @@ Hack-Stair-AIML-1/
 
 ## 🛠️ Available Tools
 
-The system provides 8 MCP tools:
+The system provides 13 MCP tools across two servers:
 
 ### RAG & Dataset Search
 - `search_datasets` - Find datasets by semantic search
@@ -186,10 +193,17 @@ The system provides 8 MCP tools:
 - `build_webmap_url` - Generate interactive map links
 - `extract_location_from_query` - NLP location extraction
 - `enrich_dataset_with_location` - Add spatial context
-
-### Utilities
 - `get_map_theme_for_dataset` - Suggest map visualization
 - `build_geodatashop_links` - Download and metadata URLs
+
+### Height/Elevation ⛰️ **NEW**
+- `get_height_at_location` - Query elevation by coordinates
+- `get_height_by_name` - Query elevation by location name (e.g., "Bahnhof Luzern")
+- `get_elevation_profile` - Get elevation profile along a path
+- `convert_wgs84_to_lv95` - GPS to Swiss coordinate transformation
+- `convert_lv95_to_wgs84` - Swiss to GPS coordinate transformation
+
+**Data Source**: swissALTI3D (0.5-2m resolution, Swiss Federal Office of Topography)
 
 ## 📚 Documentation
 
