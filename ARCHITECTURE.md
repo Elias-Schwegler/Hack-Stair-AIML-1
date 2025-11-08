@@ -373,6 +373,53 @@ pydantic>=2.0.0               # Data validation
 
 ## Configuration
 
+## Containerization & Deployment (Docker)
+
+### Architektur mit Docker Compose
+
+Das System läuft in zwei separaten Containern:
+
+- **Backend**: Python 3.11-slim, FastAPI/Uvicorn, MCP, RAG, Location-Tools
+- **Frontend**: nginx:alpine, statische Auslieferung von `index.html`, JS/CSS
+
+Beide Container sind über ein gemeinsames Docker-Netzwerk verbunden (`geopard-network`).
+Die Backend-API ist unter `http://localhost:8000` erreichbar, das Frontend unter `http://localhost:8080`.
+
+### Docker Compose Aufbau
+
+- `docker-compose.yml` definiert beide Services (`backend`, `frontend`), jeweils mit Healthcheck, Restart-Policy und Port-Mapping.
+- Die Backend-Umgebung erhält alle nötigen Azure- und Modell-Umgebungsvariablen aus `.env`.
+- Die Daten (`./data`) werden als Read-Only Volume ins Backend gemountet.
+
+### Images bauen & starten
+
+```sh
+# Images bauen
+docker compose build
+# Container starten
+docker compose up -d
+# Logs ansehen
+docker compose logs -f
+```
+
+### Best Practices
+
+- Images sind "slim" und "alpine" für minimale Größe und schnelle Builds.
+- Healthchecks prüfen API und Frontend-Verfügbarkeit.
+- Netzwerk "bridge" erlaubt Outbound-Internet für API-Requests (z.B. Azure).
+- Trennung von Backend/Frontend erleichtert Updates und Skalierung.
+
+### Zugriff
+
+- Frontend: http://localhost:8080
+- Backend-API: http://localhost:8000
+
+### Hinweise
+
+- Die Images müssen nach Code-Änderungen neu gebaut werden (`docker compose build`).
+- Die Container können gestoppt und entfernt werden mit `docker compose down`.
+
+
 ### Environment Variables (`.env`)
 
 ```bash

@@ -25,21 +25,54 @@ Geopard is an AI-powered assistant that helps users find, understand, and access
 
 ## 🚀 Quick Start
 
-### Option 1: Docker (Recommended for Windows)
+### Option 1: Docker (Recommended)
 
-**Prerequisites:** Docker Desktop installed
+This repository includes a `docker-compose.yml` that builds two services:
 
-```bash
-# Windows
-start-docker.bat
+- `backend` (FastAPI + Uvicorn) exposed on port 8000
+- `frontend` (nginx static server) exposed on port 8080
 
-# Linux/macOS
-./start-docker.sh
+**Prerequisites:** Docker (Desktop) and Compose plugin
+
+1) Make sure your `.env` is present at the repo root (it will be read by Compose). If you don't have one, copy the example and fill credentials:
+
+```powershell
+cp .env.example .env
+# edit .env with your Azure keys
+notepad .env
 ```
 
-Then open http://localhost:8000 in your browser.
+2) Build images and start services (from repo root):
 
-👉 **See [DOCKER.md](DOCKER.md) for complete Docker documentation**
+```powershell
+docker compose build
+docker compose up -d
+```
+
+3) Follow logs (optional):
+
+```powershell
+docker compose logs -f
+```
+
+4) Access the services in your browser:
+
+- Frontend UI: http://localhost:8080
+- Backend API: http://localhost:8000 (e.g. /docs or /health)
+
+5) Stop and remove containers:
+
+```powershell
+docker compose down --remove-orphans
+```
+
+Notes & tips:
+- Compose automatically reads `.env` in the repo root; ensure your secrets are set there (do NOT commit secrets).
+- Use `docker compose ps` to check service status.
+- If you run into port conflicts, stop the conflicting process or change ports in `docker-compose.yml`.
+- The containers have outbound network access by default (bridge network), so Azure requests should work from inside the container.
+
+👉 **See [DOCKER.md](DOCKER.md) for additional platform-specific instructions and troubleshooting**
 
 ### Option 2: Native Python Setup
 

@@ -30,7 +30,8 @@ RUN pip install --upgrade pip && \
 COPY backend/ ./backend/
 COPY frontend/ ./frontend/
 COPY location-tools/ ./location-tools/
-COPY data/ ./data/
+## Data is indexed in Azure, not needed in container
+#COPY data/ ./data/
 COPY mcp_server.py ./
 COPY mcp_config.json ./
 
