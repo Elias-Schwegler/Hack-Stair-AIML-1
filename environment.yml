@@ -1,0 +1,17 @@
+name: HackStair
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.14
+  - pip  # Ensures pip is available for extras like uvicorn[standard]
+  - fastapi
+  - uvicorn  # The [standard] extras (e.g., websockets, watchfiles) are handled via pip below
+  - python-dotenv
+  - pydantic
+  - httpx
+  - openai
+  - azure-search-documents
+  - azure-identity
+  - pip:
+      - uvicorn[standard]  # Installs uvicorn with standard extras (e.g., for ASGI servers with auto-reload)
