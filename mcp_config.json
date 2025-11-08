@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "geopard-unified": {
+      "command": "python",
+      "args": [
+        "/home/david/HackSTAIR2025/git/Hack-Stair-AIML-1/mcp_server.py"
+      ],
+      "env": {}
+    }
+  }
+}

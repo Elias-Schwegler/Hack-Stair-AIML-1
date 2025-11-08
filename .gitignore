@@ -206,4 +206,34 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-.json
+# Project-specific
+# Environment variables (contains secrets)
+.env
+.env.local
+.env.*.local
+
+
+# Data files (if large)
+# data/*.json  # Uncomment if data files are too large
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Backup files
+*.backup
+*.bak
+*.old

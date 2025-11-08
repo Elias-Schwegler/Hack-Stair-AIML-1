@@ -1,10 +1,7 @@
-fastapi
-uvicorn[standard]
-python-dotenv
-pydantic
-httpx
-
-# Azure SDKs
-openai
-azure-search-documents
-azure-identity
+# Core dependencies for RAG system
+python-dotenv>=1.2.1
+openai>=2.7.1
+azure-search-documents>=11.6.0
+azure-core>=1.36.0
+azure-identity>=1.25.1
+requests>=2.31.0
