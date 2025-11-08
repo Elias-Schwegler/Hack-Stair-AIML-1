@@ -119,44 +119,6 @@ class WebmapURLBuilder:
     MAPS = {f"{i:03d}_" + p.replace("/", "_"): p for i, p in enumerate(paths, 1)}
     MAPS["default"] = "objekte/grundbuchplan"
 
-   
-    
-    def build_url(
-        self, 
-        map_theme: str = 'default',
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        zoom: int = 4515,
-        add_marker: bool = True
-    ) -> str:
-        """
-        Build a webmap URL with focus and marker
-        
-        Args:
-            map_theme: Map theme key (e.g., 'grundbuchplan')
-            x, y: Coordinates (Swiss LV95)
-            zoom: Zoom level (higher = more zoomed in)
-            add_marker: Whether to add a marker at the location
-        
-        Returns:
-            Complete webmap URL
-        """
-        map_path = self.MAPS.get(map_theme, self.MAPS['default'])
-        url = f"{self.BASE_URL}/{map_path}"
-        
-        params = []
-        
-        if x is not None and y is not None:
-            params.append(f"FOCUS={x:.0f}:{y:.0f}:{zoom}")
-        
-        if add_marker and x is not None and y is not None:
-            params.append("marker")
-        
-        if params:
-            url += "?" + "&".join(params)
-        
-        return url
-    
     def get_map_for_dataset(self, dataset_title: str) -> str:
         """
         Determine appropriate map theme based on dataset title
@@ -168,6 +130,7 @@ class WebmapURLBuilder:
             Map theme key
         """
         t = dataset_title.lower()
+        print("t",t)
         
         if any(w in t for w in ["baugesuch", "baubewilligung"]): return "objekte/baugesuche"
         elif any(w in t for w in ["grundbuch", "kataster", "parzelle", "vermess"]): return "objekte/grundbuchplan"
@@ -288,9 +251,49 @@ class WebmapURLBuilder:
         elif "vernetzung soll" in t: return "vernetzung/soll"
         elif "grundwasser schutz" in t or ("grundwasser" in t and "schutz" in t): return "grundwasser/schutz"
         elif "grundwasser vorkommen" in t or ("grundwasser" in t and "vorkommen" in t): return "grundwasser/vorkommen"
-        elif any(w in t for w in ["höhe", "hoehe", "terrain", "dtm", "dom"]): return "hoehen"
+        elif any(w in t for w in ["höhe", "hoehe","hoehen" "terrain", "dtm", "dom"]): return "hoehen"
         else: return "objekte/grundbuchplan"
 
+    
+    def build_url(
+        self, 
+        map_theme: str = 'default',
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        zoom: int = 4515,
+        add_marker: bool = True
+    ) -> str:
+        """
+        Build a webmap URL with focus and marker
+        
+        Args:
+            map_theme: Map theme key (e.g., 'grundbuchplan')
+            x, y: Coordinates (Swiss LV95)
+            zoom: Zoom level (higher = more zoomed in)
+            add_marker: Whether to add a marker at the location
+        
+        Returns:
+            Complete webmap URL
+        """
+        map_id = self.get_map_for_dataset(map_theme)
+        print(map_id)
+        map_path = self.MAPS.get(map_id, self.MAPS['default'])
+        url = f"{self.BASE_URL}/{map_path}"
+        
+        params = []
+        
+        if x is not None and y is not None:
+            params.append(f"FOCUS={x:.0f}:{y:.0f}:{zoom}")
+        
+        if add_marker and x is not None and y is not None:
+            params.append("marker")
+        
+        if params:
+            url += "?" + "&".join(params)
+        
+        return url
+    
+   
 
 class GeodatashopLinkBuilder:
     """
