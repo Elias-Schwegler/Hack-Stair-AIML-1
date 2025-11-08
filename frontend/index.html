@@ -4,19 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kanton Luzern - Kartenansicht</title>
-    
+
     <!-- Proj4js for coordinate transformations -->
     <script src="https://cdn.jsdelivr.net/npm/proj4@2.11.0/dist/proj4.js"></script>
-    
+
     <!-- OpenLayers CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.5.0/ol.css" type="text/css">
-    
+
     <!-- OpenLayers JS -->
     <script src="https://cdn.jsdelivr.net/npm/ol@10.5.0/dist/ol.js"></script>
-    
+
     <!-- Marked.js for Markdown rendering -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    
+
     <!-- Custom styles -->
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -56,6 +56,9 @@
                             Hallo! Ich bin Ihr Geodaten-Assistent für den Kanton Luzern. Wie kann ich Ihnen helfen?
                         </div>
                     </div>
+                </div>
+                <div id="prompt-suggestions" class="prompt-suggestions">
+                    <!-- Suggestions will be added here by JavaScript -->
                 </div>
                 <div class="chat-input-area">
                     <input type="text" id="chat-input" placeholder="Fragen Sie nach Geodaten..." />
