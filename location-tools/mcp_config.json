@@ -6,6 +6,13 @@
         "/home/david/HackSTAIR2025/git/Hack-Stair-AIML-1/location-tools/mcp_server.py"
       ],
       "env": {}
+    },
+    "geopard-height-tools": {
+      "command": "python",
+      "args": [
+        "/home/david/HackSTAIR2025/git/Hack-Stair-AIML-1/location-tools/mcp_server_height.py"
+      ],
+      "env": {}
     }
   }
 }

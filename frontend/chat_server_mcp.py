@@ -64,6 +64,7 @@ class HealthCheck(BaseModel):
     status: str
     rag_available: bool
     mcp_available: bool
+    height_tools_available: bool
     azure_openai: bool
     azure_search: bool
 
@@ -73,6 +74,7 @@ class HealthCheck(BaseModel):
 
 # Import MCP tools
 MCP_AVAILABLE = False
+HEIGHT_TOOLS_AVAILABLE = False
 
 try:
     from location_tools import GeopardToolkit
@@ -81,6 +83,14 @@ try:
     print("✓ MCP Location Tools loaded")
 except Exception as e:
     print(f"⚠ MCP Location Tools not available: {e}")
+
+try:
+    from height_tools import HeightQueryToolkit
+    height_toolkit = HeightQueryToolkit()
+    HEIGHT_TOOLS_AVAILABLE = True
+    print("✓ Height/Elevation Tools loaded")
+except Exception as e:
+    print(f"⚠ Height Tools not available: {e}")
 
 # Import RAG system
 RAG_AVAILABLE = False
@@ -223,6 +233,49 @@ Use this to provide users with visual representation of geodata or locations."""
             }
         ])
     
+    if HEIGHT_TOOLS_AVAILABLE:
+        tools.extend([
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_height_by_name",
+                    "description": """Query elevation/height above sea level for a named location.
+                    
+Use for questions like 'Wie hoch liegt...', 'Auf welcher Höhe...', 'Elevation of...'.
+Returns height in meters above sea level (m ü. M.) using swissALTI3D data.""",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "location_name": {
+                                "type": "string",
+                                "description": "Location name (address, landmark, place)"
+                            }
+                        },
+                        "required": ["location_name"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_height_at_coordinates",
+                    "description": """Query elevation at specific coordinates (WGS84 or LV95).
+                    
+Use when you have exact coordinates and need elevation data.""",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "latitude": {"type": "number", "description": "Latitude (WGS84)"},
+                            "longitude": {"type": "number", "description": "Longitude (WGS84)"},
+                            "easting": {"type": "number", "description": "E coordinate (LV95)"},
+                            "northing": {"type": "number", "description": "N coordinate (LV95)"}
+                        },
+                        "required": []
+                    }
+                }
+            }
+        ])
+    
     return tools
 
 # =============================================================================
@@ -328,6 +381,51 @@ async def execute_mcp_tool(tool_name: str, arguments: Dict) -> Dict:
                 "map_theme": map_theme
             }
         
+        elif tool_name == "get_height_by_name":
+            if not HEIGHT_TOOLS_AVAILABLE:
+                return {"error": "Height tools not available"}
+            
+            location_name = arguments.get("location_name")
+            result = height_toolkit.query_height_by_location_name(location_name)
+            
+            # Add map URL with zoom to location if coordinates available
+            if result.get("success") and "coordinates" in result:
+                coords = result["coordinates"]
+                if "lv95" in coords:
+                    x = coords["lv95"]["easting"]
+                    y = coords["lv95"]["northing"]
+                    
+                    # Generate map URL with zoom
+                    map_url = location_toolkit.webmap_builder.build_url(
+                        map_theme="hoehen",  # Use height/elevation map theme
+                        x=x,
+                        y=y,
+                        zoom=8000,  # Closer zoom for detailed view
+                        add_marker=True
+                    )
+                    result["map_url"] = map_url
+                    result["map_zoom_applied"] = True
+            
+            return result
+        
+        elif tool_name == "get_height_at_coordinates":
+            if not HEIGHT_TOOLS_AVAILABLE:
+                return {"error": "Height tools not available"}
+            
+            lat = arguments.get("latitude")
+            lon = arguments.get("longitude")
+            easting = arguments.get("easting")
+            northing = arguments.get("northing")
+            
+            if lat and lon:
+                result = height_toolkit.query_height_wgs84(lat, lon)
+            elif easting and northing:
+                result = height_toolkit.query_height_lv95(easting, northing)
+            else:
+                return {"error": "Must provide either (latitude, longitude) or (easting, northing)"}
+            
+            return result
+        
         else:
             return {"error": f"Unknown tool: {tool_name}"}
     
@@ -360,64 +458,26 @@ async def process_chat_with_mcp(
     messages = [
         {
             "role": "system",
-            "content": """Du bist ein hilfreicher Assistent für Geodaten des Kantons Luzern.
+            "content": """Geodaten-Assistent für Kanton Luzern. Antworte auf Schweizer Hochdeutsch.
 
-**DEINE WERKZEUGE:**
-Du hast Zugriff auf folgende Werkzeuge zur Informationsbeschaffung:
+**TOOLS:**
+1. **ask_geodata_question**: Geodaten-Fragen → fertige Antworten mit Links (1:1 weitergeben!)
+2. **search_location**: "Wo ist..." → Adressen/Orte finden
+3. **get_height_by_name**: Höhenabfragen → m ü. M. (swissALTI3D)
+4. **create_map_link**: Karten-URLs generieren
 
-1. **ask_geodata_question**: Für ALLE Fragen zu Geodatensätzen
-   - Nutze dies für Fragen wie "Welcher Datensatz...", "Wo finde ich...", "Wie kann ich..."
-   - Das RAG-System liefert detaillierte Antworten mit Quellenangaben
-   - Bevorzuge dieses Tool für komplexe Geodaten-Fragen
+**WICHTIG:**
+- Geodaten-Fragen → ask_geodata_question (bevorzugt)
+- Höhenfragen → get_height_by_name + ask_geodata_question (für Geodatensätze!)
+- NIEMALS "Karte aktualisiert" schreiben (passiert automatisch)
 
-2. **search_geodata_datasets**: Für reine Suche nach Datensätzen
-   - Nutze dies nur, wenn du die Rohdaten der Datensätze brauchst
-   - Gibt Liste von Datensätzen ohne ausformulierte Antwort
-
-3. **search_location**: Finde Orte und Koordinaten
-   - Für Adressen, Ortsnamen, Gebäude-IDs (EGID), Parzellen-IDs (EGRID)
-   - **Nutze dies für Fragen wie "Wo ist...", "Zeige mir...", "Wie komme ich zu..."**
-   - **Die Karte wird automatisch zum gefundenen Ort zoomen und einen Marker setzen**
-
-4. **create_map_link**: Erstelle Karten-Links
-   - Nach erfolgreicher Ortssuche, um interaktive Karten zu zeigen
-
-**WICHTIGE REGELN:**
-
-**Tool-Auswahl:**
-- Bei Geodaten-Fragen: Nutze **ask_geodata_question** (nicht search_geodata_datasets)
-- **Bei Ortsfragen: Nutze IMMER search_location für "Wo ist...", "Zeige...", Adressen, etc.**
-- Das ask_geodata_question Tool liefert FERTIGE, detaillierte Antworten mit allen Quellenangaben, Metadaten und Links
-- Deine Aufgabe: **Gib die Antwort DIREKT weiter** ohne sie zu verändern oder umzuformulieren
-
-**Location-Handling:**
-- Bei Fragen nach Standorten, Adressen oder "Wo ist...": **Nutze search_location**
-- Die Karte wird automatisch zum Ort zoomen und einen roten Marker anzeigen
-- Informiere den Benutzer, dass die Karte aktualisiert wurde
-
-**Antwort-Format:**
-- Wenn ask_geodata_question eine Antwort liefert: **Gib sie 1:1 weiter** 
-- Füge KEINE eigenen Interpretationen oder Umformulierungen hinzu
-- Füge Karten-Links hinzu, wenn Koordinaten verfügbar sind und es sinnvoll ist
-- Sei freundlich und hilfsbereit
-- Antworte auf Schweizer Hochdeutsch
-
-**WICHTIG: Nutze die Tool-Ergebnisse EXAKT wie geliefert!**
-- ask_geodata_question liefert bereits perfekt formatierte, fachlich korrekte Antworten
-- Übernimm diese Antworten vollständig und unverändert
-- Ändere KEINE Jahreszahlen, Datensatznamen oder technischen Details
-
-**Beispiel-Ablauf für Geodaten:**
-User: "Welcher Datensatz zeigt die Höhe des Bahnhofs?"
-→ Rufe ask_geodata_question mit der Frage auf
-→ Präsentiere die detaillierte Antwort vom RAG-System
-→ Erstelle Karten-Link
-
-**Beispiel-Ablauf für Standorte:**
-User: "Wo ist der Bahnhof Luzern?"
-→ Rufe search_location mit "Bahnhof Luzern" auf
-→ Informiere Benutzer über gefundenen Standort
-→ Die Karte zoomt automatisch und zeigt einen Marker"""
+**HÖHENABFRAGEN:**
+Bei unvollständiger Adresse (z.B. "Rösslimatte 50"):
+- Nimm Luzern Stadt (6005) an
+- ERSTE ZEILE: "Ich zeige die Höhe für [Adresse] in Luzern. Falls andere Gemeinde gemeint, bitte angeben."
+- Rufe get_height_by_name + ask_geodata_question("Höhendaten") auf
+- Zeige Höhe UND Geodatensätze mit WMS/WFS-Links
+"""
         }
     ]
     
@@ -512,6 +572,7 @@ User: "Wo ist der Bahnhof Luzern?"
                 all_wms_urls = []
                 all_wfs_urls = []
                 location_data = None
+                map_url = None
                 
                 for msg in messages:
                     if msg.get("role") == "tool":
@@ -530,6 +591,19 @@ User: "Wo ist der Bahnhof Luzern?"
                                     "type": loc.get("type"),
                                     "zoom": 16
                                 }
+                            
+                            # Extract location data from height queries (get_height_by_name)
+                            if tool_result.get("success") and tool_result.get("coordinates"):
+                                coords = tool_result["coordinates"]
+                                if "lv95" in coords:
+                                    location_data = {
+                                        "x": coords["lv95"]["easting"],
+                                        "y": coords["lv95"]["northing"],
+                                        "name": tool_result.get("location_name", "Standort"),
+                                        "type": "height_query",
+                                        "zoom": 8000  # Closer zoom for height queries
+                                    }
+                                    map_url = tool_result.get("map_url")
                         except:
                             pass
                 
@@ -545,6 +619,10 @@ User: "Wo ist der Bahnhof Luzern?"
                 # Add location data if available
                 if location_data:
                     result["location_data"] = location_data
+                
+                # Add map URL if available (for height queries)
+                if map_url:
+                    result["map_url"] = map_url
                 
                 return result
         
@@ -578,6 +656,7 @@ async def health_check() -> HealthCheck:
         status="healthy" if (RAG_AVAILABLE and OPENAI_AVAILABLE) else "degraded",
         rag_available=RAG_AVAILABLE,
         mcp_available=MCP_AVAILABLE,
+        height_tools_available=HEIGHT_TOOLS_AVAILABLE,
         azure_openai=OPENAI_AVAILABLE,
         azure_search=RAG_AVAILABLE  # RAG implies search is working
     )
@@ -602,6 +681,10 @@ async def chat_endpoint(msg: ChatMessage):
         # Add location_data if available
         if "location_data" in result:
             response_data["location_data"] = result["location_data"]
+        
+        # Add map_url if available
+        if "map_url" in result:
+            response_data["map_url"] = result["map_url"]
         
         return JSONResponse(response_data)
     
@@ -653,6 +736,7 @@ if __name__ == "__main__":
     print("─"*70)
     print(f"🗄️  RAG System:      {'✓ Enabled' if RAG_AVAILABLE else '✗ Disabled'}")
     print(f"🔧 MCP Tools:       {'✓ Enabled' if MCP_AVAILABLE else '✗ Disabled'}")
+    print(f"⛰️  Height Tools:    {'✓ Enabled' if HEIGHT_TOOLS_AVAILABLE else '✗ Disabled'}")
     print(f"🤖 Azure OpenAI:    {'✓ Connected' if OPENAI_AVAILABLE else '✗ Not connected'}")
     print("─"*70)
     print("⏹️  Press Ctrl+C to stop")
