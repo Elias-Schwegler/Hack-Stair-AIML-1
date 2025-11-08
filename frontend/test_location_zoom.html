@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Location Zoom Test - Kanton Luzern</title>
+    
+    <!-- Proj4js for coordinate transformations -->
+    <script src="https://cdn.jsdelivr.net/npm/proj4@2.11.0/dist/proj4.js"></script>
+    
+    <!-- OpenLayers CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.5.0/ol.css" type="text/css">
+    
+    <!-- OpenLayers JS -->
+    <script src="https://cdn.jsdelivr.net/npm/ol@10.5.0/dist/ol.js"></script>
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        
+        #map {
+            width: 100%;
+            height: 600px;
+            border: 2px solid #333;
+        }
+        
+        .controls {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f0f0f0;
+            border-radius: 8px;
+        }
+        
+        .controls h2 {
+            margin-top: 0;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        
+        button {
+            padding: 10px 15px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background: #2980b9;
+        }
+        
+        input[type="text"] {
+            padding: 10px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            width: 300px;
+        }
+        
+        .info {
+            margin-top: 10px;
+            padding: 10px;
+            background: #e8f4f8;
+            border-left: 4px solid #3498db;
+            border-radius: 4px;
+        }
+        
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            border-radius: 4px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>🗺️ Location Zoom Feature Test</h1>
+    
+    <div class="controls">
+        <h2>Test Controls</h2>
+        
+        <div class="info">
+            <strong>Instructions:</strong> Click any button below to test the location zoom feature. 
+            The map will animate to the location and add a red marker.
+        </div>
+        
+        <h3>Pre-defined Locations</h3>
+        <div class="button-group">
+            <button onclick="testBahnhof()">🚂 Bahnhof Luzern</button>
+            <button onclick="testRathaus()">🏛️ Rathaus</button>
+            <button onclick="testKKL()">🎭 KKL</button>
+            <button onclick="testPilatus()">⛰️ Pilatus</button>
+            <button onclick="testEmmen()">🏘️ Gemeinde Emmen</button>
+        </div>
+        
+        <h3>Custom Search</h3>
+        <div style="margin-top: 10px;">
+            <input type="text" id="searchInput" placeholder="Enter location (e.g., 'Seebrücke Luzern')" />
+            <button onclick="searchCustomLocation()">🔍 Search</button>
+            <button onclick="clearAllMarkers()">🗑️ Clear Markers</button>
+        </div>
+        
+        <div id="status" class="status"></div>
+    </div>
+    
+    <div id="map"></div>
+    
+    <!-- Map JavaScript -->
+    <script src="map.js"></script>
+    
+    <script>
+        // Test functions for pre-defined locations
+        async function testBahnhof() {
+            showStatus('Searching for Bahnhof Luzern...');
+            const result = await window.zoomToLocationByName('Bahnhof Luzern');
+            if (result) {
+                showStatus(`✓ Found: ${result.name} at coordinates (${result.x}, ${result.y})`);
+            } else {
+                showStatus('❌ Location not found', 'error');
+            }
+        }
+        
+        async function testRathaus() {
+            showStatus('Searching for Rathaus Luzern...');
+            const result = await window.zoomToLocationByName('Rathaus Luzern');
+            if (result) {
+                showStatus(`✓ Found: ${result.name}`);
+            } else {
+                showStatus('❌ Location not found', 'error');
+            }
+        }
+        
+        async function testKKL() {
+            showStatus('Searching for KKL Luzern...');
+            const result = await window.zoomToLocationByName('KKL Luzern');
+            if (result) {
+                showStatus(`✓ Found: ${result.name}`);
+            } else {
+                showStatus('❌ Location not found', 'error');
+            }
+        }
+        
+        async function testPilatus() {
+            showStatus('Searching for Pilatus...');
+            // Direct coordinates for Pilatus peak
+            window.zoomToLocation(2660000, 1200000, 14, true);
+            showStatus(`✓ Zoomed to Pilatus region`);
+        }
+        
+        async function testEmmen() {
+            showStatus('Searching for Emmen...');
+            const result = await window.zoomToLocationByName('Emmen');
+            if (result) {
+                showStatus(`✓ Found: ${result.name}`);
+            } else {
+                showStatus('❌ Location not found', 'error');
+            }
+        }
+        
+        async function searchCustomLocation() {
+            const input = document.getElementById('searchInput');
+            const query = input.value.trim();
+            
+            if (!query) {
+                showStatus('Please enter a location', 'error');
+                return;
+            }
+            
+            showStatus(`Searching for "${query}"...`);
+            const result = await window.zoomToLocationByName(query);
+            
+            if (result) {
+                showStatus(`✓ Found: ${result.name} (${result.x}, ${result.y})`);
+            } else {
+                showStatus(`❌ No results found for "${query}"`, 'error');
+            }
+        }
+        
+        function clearAllMarkers() {
+            if (window.clearMarkers) {
+                window.clearMarkers();
+                showStatus('✓ All markers cleared');
+            }
+        }
+        
+        function showStatus(message, type = 'success') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.style.display = 'block';
+            
+            if (type === 'error') {
+                statusDiv.style.background = '#f8d7da';
+                statusDiv.style.borderColor = '#dc3545';
+            } else {
+                statusDiv.style.background = '#d4edda';
+                statusDiv.style.borderColor = '#28a745';
+            }
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 5000);
+        }
+        
+        // Allow Enter key in search input
+        document.getElementById('searchInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchCustomLocation();
+            }
+        });
+    </script>
+</body>
+</html>

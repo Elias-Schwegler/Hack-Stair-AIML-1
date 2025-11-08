@@ -212,6 +212,9 @@ __marimo__/
 .env.local
 .env.*.local
 
+# Documentation and simple RAG version
+docs/
+rag-simple/
 
 # Data files (if large)
 # data/*.json  # Uncomment if data files are too large

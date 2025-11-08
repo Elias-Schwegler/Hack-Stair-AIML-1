@@ -23,6 +23,15 @@ document.getElementById('clear-chat').addEventListener('click', function() {
             </div>
         </div>
     `;
+    
+    // Clear map layers and markers
+    if (typeof window.clearDynamicWmsLayers === 'function') {
+        window.clearDynamicWmsLayers();
+    }
+    if (typeof window.clearMarkers === 'function') {
+        window.clearMarkers();
+    }
+    
     console.log('Konversation zurückgesetzt');
 });
 
@@ -95,6 +104,27 @@ async function sendMessage() {
             role: 'assistant',
             content: data.response
         });
+        
+        // Handle location data if present
+        if (data.location_data) {
+            console.log('Location data found:', data.location_data);
+            
+            const loc = data.location_data;
+            
+            // Clear existing markers
+            if (typeof window.clearMarkers === 'function') {
+                window.clearMarkers();
+            }
+            
+            // Zoom to location with marker
+            if (typeof window.zoomToLocation === 'function') {
+                window.zoomToLocation(loc.x, loc.y, loc.zoom || 16, true);
+                
+                // Add notification to response
+                const locationNote = `\n\n📍 *Karte zentriert auf: ${loc.name || 'Standort'}*`;
+                data.response += locationNote;
+            }
+        }
         
         // Handle WMS layers if present
         if (data.wms_urls && data.wms_urls.length > 0) {

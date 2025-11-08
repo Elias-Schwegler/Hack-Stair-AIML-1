@@ -12,6 +12,7 @@ Geopard is an AI-powered assistant that helps users find, understand, and access
 - **💬 Natural Language Q&A** - Ask questions in German, get precise answers with citations
 - **📍 Location Intelligence** - Find places, coordinates, and spatial context
 - **🗺️ Interactive Maps** - Generate direct links to webmaps with zoom and markers
+- **🎯 Auto Zoom & Markers** - Ask about a place and the map automatically zooms there with a marker
 - **🌐 Web Interface** - User-friendly chat interface with map integration
 
 ### Capability Levels
@@ -165,8 +166,11 @@ Hack-Stair-AIML-1/
 "Zeige mir die Wildruhezonen in Emmen auf einer Karte"
 → Finds dataset + location + generates interactive map URL
 
+"Wo ist der Bahnhof Luzern?"
+→ Zooms the map to Bahnhof Luzern with a red marker automatically
+
 "Ist die Adresse Mürgi 1, 6025 Neudorf von Verkehrslärm betroffen?"
-→ Finds noise datasets + location + provides map with noise overlay
+→ Finds noise datasets + location + provides map with noise overlay + zooms to address
 ```
 
 ## 🛠️ Available Tools
@@ -191,6 +195,8 @@ The system provides 8 MCP tools:
 
 - **[DOCKER.md](DOCKER.md)** - Docker deployment guide (all platforms)
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - Technical architecture and design
+- **[docs/LOCATION_ZOOM_FEATURE.md](docs/LOCATION_ZOOM_FEATURE.md)** - Location zoom & marker feature guide
+- **[docs/IMPLEMENTATION_SUMMARY.md](docs/IMPLEMENTATION_SUMMARY.md)** - Recent feature implementation summary
 - **[frontend/README.md](frontend/README.md)** - Web server setup and usage
 - **[backend/README.md](backend/README.md)** - RAG system details
 - **[location-tools/README.md](location-tools/README.md)** - Location tools guide

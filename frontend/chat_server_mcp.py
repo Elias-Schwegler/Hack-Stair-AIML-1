@@ -376,6 +376,8 @@ Du hast Zugriff auf folgende Werkzeuge zur Informationsbeschaffung:
 
 3. **search_location**: Finde Orte und Koordinaten
    - Für Adressen, Ortsnamen, Gebäude-IDs (EGID), Parzellen-IDs (EGRID)
+   - **Nutze dies für Fragen wie "Wo ist...", "Zeige mir...", "Wie komme ich zu..."**
+   - **Die Karte wird automatisch zum gefundenen Ort zoomen und einen Marker setzen**
 
 4. **create_map_link**: Erstelle Karten-Links
    - Nach erfolgreicher Ortssuche, um interaktive Karten zu zeigen
@@ -384,8 +386,14 @@ Du hast Zugriff auf folgende Werkzeuge zur Informationsbeschaffung:
 
 **Tool-Auswahl:**
 - Bei Geodaten-Fragen: Nutze **ask_geodata_question** (nicht search_geodata_datasets)
+- **Bei Ortsfragen: Nutze IMMER search_location für "Wo ist...", "Zeige...", Adressen, etc.**
 - Das ask_geodata_question Tool liefert FERTIGE, detaillierte Antworten mit allen Quellenangaben, Metadaten und Links
 - Deine Aufgabe: **Gib die Antwort DIREKT weiter** ohne sie zu verändern oder umzuformulieren
+
+**Location-Handling:**
+- Bei Fragen nach Standorten, Adressen oder "Wo ist...": **Nutze search_location**
+- Die Karte wird automatisch zum Ort zoomen und einen roten Marker anzeigen
+- Informiere den Benutzer, dass die Karte aktualisiert wurde
 
 **Antwort-Format:**
 - Wenn ask_geodata_question eine Antwort liefert: **Gib sie 1:1 weiter** 
@@ -399,11 +407,17 @@ Du hast Zugriff auf folgende Werkzeuge zur Informationsbeschaffung:
 - Übernimm diese Antworten vollständig und unverändert
 - Ändere KEINE Jahreszahlen, Datensatznamen oder technischen Details
 
-**Beispiel-Ablauf:**
+**Beispiel-Ablauf für Geodaten:**
 User: "Welcher Datensatz zeigt die Höhe des Bahnhofs?"
 → Rufe ask_geodata_question mit der Frage auf
 → Präsentiere die detaillierte Antwort vom RAG-System
-→ Erstelle Karten-Link"""
+→ Erstelle Karten-Link
+
+**Beispiel-Ablauf für Standorte:**
+User: "Wo ist der Bahnhof Luzern?"
+→ Rufe search_location mit "Bahnhof Luzern" auf
+→ Informiere Benutzer über gefundenen Standort
+→ Die Karte zoomt automatisch und zeigt einen Marker"""
         }
     ]
     
@@ -494,19 +508,32 @@ User: "Welcher Datensatz zeigt die Höhe des Bahnhofs?"
                 # No more tool calls - return final response
                 final_response = assistant_message.content or "Entschuldigung, ich konnte keine Antwort generieren."
                 
-                # Collect WMS/WFS URLs from all tool results
+                # Collect WMS/WFS URLs and location data from all tool results
                 all_wms_urls = []
                 all_wfs_urls = []
+                location_data = None
+                
                 for msg in messages:
                     if msg.get("role") == "tool":
                         try:
                             tool_result = json.loads(msg["content"])
                             all_wms_urls.extend(tool_result.get("wms_urls", []))
                             all_wfs_urls.extend(tool_result.get("wfs_urls", []))
+                            
+                            # Extract location data from search_location results
+                            if tool_result.get("locations") and len(tool_result["locations"]) > 0:
+                                loc = tool_result["locations"][0]
+                                location_data = {
+                                    "x": loc.get("cx"),
+                                    "y": loc.get("cy"),
+                                    "name": loc.get("name"),
+                                    "type": loc.get("type"),
+                                    "zoom": 16
+                                }
                         except:
                             pass
                 
-                return {
+                result = {
                     "response": final_response,
                     "error": False,
                     "tool_calls_made": tool_calls_made,
@@ -514,6 +541,12 @@ User: "Welcher Datensatz zeigt die Höhe des Bahnhofs?"
                     "wms_urls": list(set(all_wms_urls)),
                     "wfs_urls": list(set(all_wfs_urls))
                 }
+                
+                # Add location data if available
+                if location_data:
+                    result["location_data"] = location_data
+                
+                return result
         
         except Exception as e:
             print(f"❌ Error in chat processing: {e}")
@@ -558,13 +591,19 @@ async def chat_endpoint(msg: ChatMessage):
         # Synchronous response
         result = await process_chat_with_mcp(msg.message, msg.conversation_history)
         
-        return JSONResponse({
+        response_data = {
             "response": result["response"],
             "error": result.get("error", False),
             "iterations": result.get("iterations", 0),
             "wms_urls": result.get("wms_urls", []),
             "wfs_urls": result.get("wfs_urls", [])
-        })
+        }
+        
+        # Add location_data if available
+        if "location_data" in result:
+            response_data["location_data"] = result["location_data"]
+        
+        return JSONResponse(response_data)
     
     except Exception as e:
         import traceback

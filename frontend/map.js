@@ -7,6 +7,8 @@ let map;
 let currentBackgroundLayer = 'osm';
 let osmLayer, swissLayer;
 let dynamicWmsLayers = []; // Store dynamically added WMS layers
+let markerLayer; // Vector layer for location markers
+let markerSource; // Source for markers
 
 // Initialize the map
 function initializeMap() {
@@ -78,8 +80,31 @@ function initializeMap() {
         // Add scale line control
         map.addControl(new ol.control.ScaleLine());
 
+        // Create marker layer for location highlighting
+        markerSource = new ol.source.Vector();
+        markerLayer = new ol.layer.Vector({
+            source: markerSource,
+            style: new ol.style.Style({
+                image: new ol.style.Icon({
+                    anchor: [0.5, 1],
+                    anchorXUnits: 'fraction',
+                    anchorYUnits: 'fraction',
+                    src: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+                        '<svg width="32" height="48" xmlns="http://www.w3.org/2000/svg">' +
+                        '<path d="M16 0C7.2 0 0 7.2 0 16c0 12 16 32 16 32s16-20 16-32C32 7.2 24.8 0 16 0z" fill="%23e74c3c"/>' +
+                        '<circle cx="16" cy="16" r="8" fill="white"/>' +
+                        '</svg>'
+                    ),
+                    scale: 1.2
+                })
+            }),
+            zIndex: 1000
+        });
+        map.addLayer(markerLayer);
+
         // Make map globally available
         window.map = map;
+        window.markerSource = markerSource;
 
         console.log('Map initialized successfully!');
 
@@ -273,9 +298,114 @@ document.addEventListener('DOMContentLoaded', function() {
     setupButtonHandlers();
 });
 
+// Zoom to location with animated transition
+function zoomToLocation(x, y, zoom = 16, addMarker = true) {
+    if (!map) {
+        console.error('Map not initialized');
+        return;
+    }
+
+    try {
+        // Convert Swiss LV95 coordinates to map projection (EPSG:3857)
+        const coords = ol.proj.transform([x, y], 'EPSG:2056', 'EPSG:3857');
+        
+        // Animate zoom and pan to location
+        const view = map.getView();
+        view.animate({
+            center: coords,
+            zoom: zoom,
+            duration: 1000,
+            easing: ol.easing.easeOut
+        });
+
+        // Add marker if requested
+        if (addMarker) {
+            addLocationMarker(x, y);
+        }
+
+        console.log(`Zoomed to location: ${x}, ${y}`);
+    } catch (error) {
+        console.error('Error zooming to location:', error);
+    }
+}
+
+// Add a marker at specified location
+function addLocationMarker(x, y, label = '') {
+    if (!markerSource) {
+        console.error('Marker source not initialized');
+        return;
+    }
+
+    try {
+        // Convert coordinates to map projection
+        const coords = ol.proj.transform([x, y], 'EPSG:2056', 'EPSG:3857');
+        
+        // Create marker feature
+        const marker = new ol.Feature({
+            geometry: new ol.geom.Point(coords),
+            name: label
+        });
+
+        // Add marker to source
+        markerSource.addFeature(marker);
+
+        console.log(`Added marker at: ${x}, ${y}`);
+    } catch (error) {
+        console.error('Error adding marker:', error);
+    }
+}
+
+// Clear all markers from map
+function clearMarkers() {
+    if (markerSource) {
+        markerSource.clear();
+        console.log('Cleared all markers');
+    }
+}
+
+// Zoom to location by name using LocationFinder API
+async function zoomToLocationByName(locationName) {
+    if (!locationName) return;
+
+    try {
+        const apiUrl = `https://svc.geo.lu.ch/locationfinder/api/v1/lookup?query=${encodeURIComponent(locationName)}&limit=1`;
+        
+        const response = await fetch(apiUrl);
+        if (!response.ok) {
+            throw new Error('LocationFinder API request failed');
+        }
+
+        const data = await response.json();
+        const locs = data.locs || [];
+
+        if (locs.length > 0) {
+            const location = locs[0];
+            const x = location.cx;
+            const y = location.cy;
+            const name = location.name;
+
+            // Zoom to location with marker
+            zoomToLocation(x, y, 16, true);
+
+            console.log(`Found location: ${name} at ${x}, ${y}`);
+            return { x, y, name };
+        } else {
+            console.log(`No location found for: ${locationName}`);
+            return null;
+        }
+    } catch (error) {
+        console.error('Error finding location:', error);
+        return null;
+    }
+}
+
 // Make functions globally available
 window.toggleBackgroundLayer = toggleBackgroundLayer;
 window.addWmsLayer = addWmsLayer;
 window.clearDynamicWmsLayers = clearDynamicWmsLayers;
 window.toggleWmsLayer = toggleWmsLayer;
 window.getWmsCapabilities = getWmsCapabilities;
+window.zoomToLocation = zoomToLocation;
+window.addLocationMarker = addLocationMarker;
+window.clearMarkers = clearMarkers;
+window.zoomToLocationByName = zoomToLocationByName;
