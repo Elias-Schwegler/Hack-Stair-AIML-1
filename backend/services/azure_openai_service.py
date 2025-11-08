@@ -22,23 +22,36 @@ class AzureOpenAIService:
     
     def _get_system_prompt(self) -> str:
         return """Du bist ein hilfsbereiter Assistent für das Geoportal des Kantons Luzern.
+        Deine Aufgaben:
+        1. Helfe Nutzern, die richtigen Geodatensätze zu finden
+        2. Beantworte Fragen zu Geodaten und deren Metadaten
+        3. Finde Standorte und verlinke zu passenden Karten
+        4. Gib immer die Quellen (URLs zu Metadaten und Geodatashop) an
 
-Deine Aufgaben:
-1. Helfe Nutzern, die richtigen Geodatensätze zu finden
-2. Beantworte Fragen zu Geodaten und deren Metadaten
-3. Finde Standorte und verlinke zu passenden Karten
-4. Gib immer die Quellen (URLs) an
+        Verfügbare Tools:
+        - search_metadata: Suche nach Geodatensätzen in der Metadatenbank
+        - resolve_location: Finde Koordinaten für Adressen, Orte, Gebäude (EGID), Grundstücke (EGRID)
+        - generate_map_url: Erstelle Links zu interaktiven Webkarten mit Marker
 
-Verfügbare Tools:
-- search_metadata: Suche nach Geodatensätzen in der Metadatenbank
-- resolve_location: Finde Koordinaten für Adressen, Orte, EGID, EGRID
-- generate_map_url: Erstelle Webkarten-Links mit Marker
+        WICHTIG - Wann welches Tool verwenden:
+        - Bei Fragen nach "Welcher Datensatz..." → search_metadata verwenden
+        - Bei Fragen nach "Wo liegt..." oder "Auf welcher Höhe..." → ZUERST resolve_location, DANN search_metadata für passende Daten, DANN generate_map_url
+        - Bei Fragen nach "Informationen über..." → search_metadata verwenden
 
-Antworte:
-- Auf Deutsch
-- Präzise und hilfreich
-- Mit konkreten Links zu Datensätzen
-- Zitiere immer die Datenquellen (URLs)"""
+        Antwort-Format:
+        - Gib immer konkrete Links zu Metadaten und Geodatashop an
+        - Bei Standort-Fragen: Koordinaten nennen UND Webkarten-Link erstellen
+        - Bei Höhenfragen: Erkläre, welcher Datensatz die Höhe zeigt (z.B. DTM) und wie man sie abrufen kann
+        - Zitiere die Datenquellen klar
+
+        Beispiele:
+        Frage: "Auf welcher Höhe liegt der Bahnhof Luzern?"
+        1. resolve_location("Bahnhof Luzern")
+        2. search_metadata("Höhendaten Terrain DTM")
+        3. generate_map_url mit den gefundenen Koordinaten
+        Antwort: "Der Bahnhof Luzern liegt bei Koordinaten X: 2667123, Y: 1212345. Um die genaue Höhe abzufragen, nutze den Datensatz 'Digitales Terrainmodell (DTM)'. [Link zur Karte mit Marker]"
+
+        Antworte auf Deutsch, präzise und hilfreich."""
 
     def _get_tools(self) -> List[Dict]:
         return [
@@ -46,13 +59,13 @@ Antworte:
                 "type": "function",
                 "function": {
                     "name": "search_metadata",
-                    "description": "Suche nach Geodatensätzen und Collections in der Metadatenbank des Geoportals",
+                    "description": "Suche nach Geodatensätzen und Collections in der Metadatenbank. Verwende dies für Fragen nach 'Welcher Datensatz...', 'Welche Daten...', 'Informationen über...'",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "query": {
                                 "type": "string",
-                                "description": "Suchbegriff für Geodaten (z.B. 'Höhendaten', 'Verkehrslärm', 'Gewässer')"
+                                "description": "Suchbegriff für Geodaten. Beispiele: 'Höhendaten DTM', 'Verkehrslärm', 'Gewässer See', 'Gebäude'"
                             },
                             "top": {
                                 "type": "integer",
@@ -68,17 +81,17 @@ Antworte:
                 "type": "function",
                 "function": {
                     "name": "resolve_location",
-                    "description": "Finde Koordinaten für eine Adresse, einen Ort, EGID, EGRID oder Gebäudeversicherungsnummer",
+                    "description": "Finde Koordinaten für eine Adresse, einen Ort, ein Gebäude oder Grundstück. VERWENDE DIES IMMER bei Fragen wie 'Wo liegt...', 'Auf welcher Höhe...', 'Zeige mir auf der Karte...'",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "location": {
                                 "type": "string",
-                                "description": "Adresse, Ortsname, EGID, EGRID oder Gebäudeversicherungsnummer"
+                                "description": "Der gesuchte Ort. Beispiele: 'Bahnhof Luzern', 'Mürgi 1.1, 6025 Neudorf', 'Sursee', EGID oder EGRID"
                             },
                             "location_type": {
                                 "type": "string",
-                                "description": "Typ der Suche: Adresse, Gemeinde, Ort, EGID, EGRID, Grundstück",
+                                "description": "Typ der Suche (optional): Adresse, Gemeinde, Ort, EGID, EGRID, Grundstück",
                                 "enum": ["Adresse", "Gemeinde", "Ort", "EGID", "EGRID", "Grundstück"]
                             }
                         },
@@ -90,21 +103,21 @@ Antworte:
                 "type": "function",
                 "function": {
                     "name": "generate_map_url",
-                    "description": "Erstelle einen Link zur Webkarte mit Marker an bestimmten Koordinaten",
+                    "description": "Erstelle einen Link zur interaktiven Webkarte mit Marker. Verwende dies NACH resolve_location um dem Nutzer die Karte zu zeigen.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "map_id": {
                                 "type": "string",
-                                "description": "ID der Webkarte (z.B. 'grundbuchplan', 'oberflaechengewaesser')",
+                                "description": "ID der Webkarte. Verwende 'grundbuchplan' für allgemeine Karten, 'oberflaechengewaesser' für Gewässer.",
                                 "default": "grundbuchplan"
                             },
                             "coords": {
                                 "type": "object",
-                                "description": "Koordinaten im LV95 System",
+                                "description": "Koordinaten im LV95 System (aus resolve_location)",
                                 "properties": {
-                                    "x": {"type": "number"},
-                                    "y": {"type": "number"}
+                                    "x": {"type": "number", "description": "X-Koordinate (cx vom LocationFinder)"},
+                                    "y": {"type": "number", "description": "Y-Koordinate (cy vom LocationFinder)"}
                                 },
                                 "required": ["x", "y"]
                             }
@@ -123,13 +136,18 @@ Antworte:
                 top = arguments.get("top", 5)
                 results = self.search_service.search(query, top=top)
                 
-                # Format for LLM
-                formatted = []
+                # Format for LLM with clear structure
+                formatted = {
+                    "found_datasets": len(results),
+                    "results": []
+                }
+                
                 for r in results:
-                    formatted.append({
+                    formatted["results"].append({
                         'title': r['title'],
                         'metauid': r['metauid'],
                         'type': r['type'],
+                        'description': r['content'][:200] + '...' if len(r['content']) > 200 else r['content'],
                         'keywords': r['keywords'],
                         'metadata_url': r['openly_url'],
                         'datashop_url': r['webapp_url'],
@@ -141,10 +159,56 @@ Antworte:
             elif tool_name == "resolve_location":
                 location = arguments.get("location")
                 location_type = arguments.get("location_type")
-                results = await self.location_service.resolve_location(location, location_type)
                 
-                # Return top 3 results
-                return json.dumps(results[:3], ensure_ascii=False, indent=2)
+                try:
+                    results = await self.location_service.resolve_location(location, location_type)
+                    
+                    if not results or len(results) == 0:
+                        return json.dumps({
+                            "status": "not_found",
+                            "message": f"Keine Ergebnisse für '{location}' gefunden. Versuche es mit einer anderen Schreibweise oder füge mehr Details hinzu.",
+                            "suggestions": [
+                                "Versuche die vollständige Adresse (z.B. 'Bahnhofstrasse 1, Luzern')",
+                                "Versuche nur den Ortsnamen (z.B. 'Luzern')",
+                                "Prüfe die Schreibweise"
+                            ]
+                        }, ensure_ascii=False)
+                    
+                    # Format top results with clear coordinates
+                    formatted = {
+                        "status": "found",
+                        "location_query": location,
+                        "count": len(results),
+                        "results": []
+                    }
+                    
+                    for r in results[:3]:
+                        formatted["results"].append({
+                            "name": r.get("name"),
+                            "type": r.get("type"),
+                            "coordinates": {
+                                "x": r.get("cx"),
+                                "y": r.get("cy"),
+                                "system": "LV95/EPSG:2056"
+                            },
+                            "extent": {
+                                "xmin": r.get("xmin"),
+                                "ymin": r.get("ymin"),
+                                "xmax": r.get("xmax"),
+                                "ymax": r.get("ymax")
+                            },
+                            "additional_info": r.get("fields", {})
+                        })
+                    
+                    return json.dumps(formatted, ensure_ascii=False, indent=2)
+                    
+                except Exception as e:
+                    logger.error(f"Location resolution error: {e}")
+                    return json.dumps({
+                        "status": "error",
+                        "message": f"Fehler bei der Ortssuche: {str(e)}",
+                        "location_query": location
+                    }, ensure_ascii=False)
             
             elif tool_name == "generate_map_url":
                 map_id = arguments.get("map_id", "grundbuchplan")
@@ -152,12 +216,21 @@ Antworte:
                 coords = (coords_dict['x'], coords_dict['y'])
                 url = self.location_service.generate_map_url(map_id, coords)
                 
-                return json.dumps({"map_url": url}, ensure_ascii=False)
+                return json.dumps({
+                    "map_url": url,
+                    "coordinates": coords_dict,
+                    "map_type": map_id,
+                    "instructions": "Dieser Link öffnet die interaktive Karte mit einem Marker am gesuchten Standort."
+                }, ensure_ascii=False, indent=2)
             
             return json.dumps({"error": "Unknown tool"}, ensure_ascii=False)
         
         except Exception as e:
-            return json.dumps({"error": str(e)}, ensure_ascii=False)
+            return json.dumps({
+                "error": str(e),
+                "tool": tool_name,
+                "arguments": arguments
+            }, ensure_ascii=False)
     
     async def chat(
         self,
@@ -251,8 +324,33 @@ if __name__ == "__main__":
     
     service = AzureOpenAIService()
     
-    async def test():
-        result = await service.chat("Welcher Datensatz zeigt mir Höhendaten?")
-        print(result["response"])
+    async def test_suite():
+        print("=== Test 1: Suche nach Höhendaten ===")
+        result1 = await service.chat("Welcher Datensatz zeigt mir Höhendaten?")
+        print(result1["response"])
+        
+        print("\n=== Test 2: Suche nach Verkehrslärm-Daten ===")
+        result2 = await service.chat("Gibt es Geodaten zum Verkehrslärm in Luzern?")
+        print(result2["response"])
+        
+        print("\n=== Test 3: Standort auflösen (Adresse) ===")
+        result3 = await service.chat("Finde die Koordinaten von Pilatusstrasse 1, Luzern")
+        print(result3["response"])
+        
+        print("\n=== Test 4: Standort auflösen (Gemeinde) ===")
+        result4 = await service.chat("Wo liegt die Gemeinde Kriens?")
+        print(result4["response"])
+        
+        print("\n=== Test 5: Map-URL generieren ===")
+        result5 = await service.chat(json.dumps({
+            "tool": "generate_map_url",
+            "coords": {"x": 683200, "y": 211300},
+            "map_id": "oberflaechengewaesser"
+        }))
+        print(result5["response"])
+        
+        print("\n=== Test 6: Kombination Suche + Map ===")
+        result6 = await service.chat("Zeige mir die Höhendaten als Marker auf der Karte")
+        print(result6["response"])
     
-    asyncio.run(test())
+    asyncio.run(test_suite())

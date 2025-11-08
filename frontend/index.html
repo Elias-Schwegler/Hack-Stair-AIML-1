@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geoportal Chatbot - Kanton Luzern</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #7e8ba3 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .chat-container {
+            width: 100%;
+            max-width: 900px;
+            height: 85vh;
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .chat-header {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            padding: 24px 30px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .logo {
+            width: 48px;
+            height: 48px;
+            background: white;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+        
+        .header-text h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .header-text p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            background: #f8f9fa;
+        }
+        
+        .message {
+            max-width: 75%;
+            padding: 14px 20px;
+            border-radius: 16px;
+            word-wrap: break-word;
+            line-height: 1.6;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .user-message {
+            align-self: flex-end;
+            background: #1e3c72;
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+        
+        .bot-message {
+            align-self: flex-start;
+            background: white;
+            color: #333;
+            border: 1px solid #e1e4e8;
+            border-bottom-left-radius: 4px;
+        }
+        
+        .bot-message a {
+            color: #1e3c72;
+            text-decoration: none;
+            font-weight: 500;
+            border-bottom: 1px solid #1e3c72;
+        }
+        
+        .bot-message a:hover {
+            background: #f0f4ff;
+        }
+        
+        .typing-indicator {
+            display: flex;
+            gap: 6px;
+            padding: 20px;
+        }
+        
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #1e3c72;
+            animation: typing 1.4s infinite;
+        }
+        
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+            30% { transform: translateY(-10px); opacity: 1; }
+        }
+        
+        .chat-input-container {
+            padding: 20px 30px;
+            background: white;
+            border-top: 1px solid #e1e4e8;
+            display: flex;
+            gap: 12px;
+        }
+        
+        #userInput {
+            flex: 1;
+            padding: 14px 20px;
+            border: 2px solid #e1e4e8;
+            border-radius: 12px;
+            font-size: 15px;
+            font-family: inherit;
+            outline: none;
+            transition: all 0.2s;
+        }
+        
+        #userInput:focus {
+            border-color: #1e3c72;
+            box-shadow: 0 0 0 3px rgba(30, 60, 114, 0.1);
+        }
+        
+        #sendButton {
+            padding: 14px 32px;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        
+        #sendButton:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(30, 60, 114, 0.3);
+        }
+        
+        #sendButton:active:not(:disabled) {
+            transform: translateY(0);
+        }
+        
+        #sendButton:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .example-prompts {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+        
+        .example-prompt {
+            padding: 8px 16px;
+            background: white;
+            border: 1px solid #e1e4e8;
+            border-radius: 20px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .example-prompt:hover {
+            background: #1e3c72;
+            color: white;
+            border-color: #1e3c72;
+            transform: translateY(-2px);
+        }
+        
+        /* Scrollbar styling */
+        .chat-messages::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .chat-messages::-webkit-scrollbar-track {
+            background: #f1f3f5;
+        }
+        
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: #cbd5e0;
+            border-radius: 4px;
+        }
+        
+        .chat-messages::-webkit-scrollbar-thumb:hover {
+            background: #a0aec0;
+        }
+        
+        @media (max-width: 768px) {
+            .chat-container {
+                height: 100vh;
+                border-radius: 0;
+            }
+            
+            .message {
+                max-width: 85%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <div class="logo">🗺️</div>
+            <div class="header-text">
+                <h1>Geoportal Chatbot</h1>
+                <p>Kanton Luzern - Geodaten Assistant</p>
+            </div>
+        </div>
+        
+        <div class="example-prompts" id="examplePrompts">
+            <div class="example-prompt" onclick="sendExamplePrompt('Welcher Datensatz zeigt mir Höhendaten?')">
+                📊 Höhendaten
+            </div>
+            <div class="example-prompt" onclick="sendExamplePrompt('Welche Datensätze gibt es zum Thema Verkehrslärm?')">
+                🔊 Verkehrslärm
+            </div>
+            <div class="example-prompt" onclick="sendExamplePrompt('Wo finde ich Informationen über Gewässer?')">
+                💧 Gewässer
+            </div>
+            <div class="example-prompt" onclick="sendExamplePrompt('Auf welcher Höhe liegt der Bahnhof Luzern?')">
+                🚉 Bahnhof Luzern
+            </div>
+        </div>
+        
+        <div class="chat-messages" id="chatMessages">
+            <div class="message bot-message">
+                👋 Hallo! Ich bin dein Assistent für das Geoportal des Kantons Luzern. 
+                <br><br>
+                Ich helfe dir, Geodaten zu finden und Fragen zu Standorten zu beantworten. 
+                <br><br>
+                Was möchtest du wissen?
+            </div>
+        </div>
+        
+        <div class="chat-input-container">
+            <input 
+                type="text" 
+                id="userInput" 
+                placeholder="Stelle eine Frage zu Geodaten..."
+                onkeypress="handleKeyPress(event)"
+                autocomplete="off"
+            />
+            <button id="sendButton" onclick="sendMessage()">Senden</button>
+        </div>
+    </div>
+
+    <script>
+        let conversationHistory = [];
+        const API_URL = 'http://localhost:8000/chat';
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        function sendExamplePrompt(prompt) {
+            document.getElementById('userInput').value = prompt;
+            sendMessage();
+            // Hide example prompts after first use
+            document.getElementById('examplePrompts').style.display = 'none';
+        }
+        function formatResponse(text) {
+            // Convert URLs to clickable links with cleaner display
+            const urlPattern = /(https?:\/\/[^\s<)"']+)/g;
+            text = text.replace(urlPattern, (url) => {
+                // Remove trailing punctuation
+                let cleanUrl = url;
+                while (cleanUrl.match(/[.,;:!?)'"]+$/)) {
+                    cleanUrl = cleanUrl.slice(0, -1);
+                }
+                
+                // Create a shorter display text
+                let displayText = cleanUrl;
+                if (cleanUrl.includes('geo.lu.ch/meta')) {
+                    displayText = '📄 Metadaten anzeigen';
+                } else if (cleanUrl.includes('geodatashop') || cleanUrl.includes('webapp')) {
+                    displayText = '🛒 Im Geodatashop öffnen';
+                } else if (cleanUrl.includes('map.geo.lu.ch')) {
+                    displayText = '🗺️ Auf Karte anzeigen';
+                }
+                
+                return `<a href="${cleanUrl}" target="_blank">${displayText}</a>`;
+            });
+            
+            // Convert line breaks
+            text = text.replace(/\n/g, '<br>');
+            
+            // Highlight metauid references
+            text = text.replace(/\b([A-Z]{3,}[0-9X]+_[A-Z_]+)\b/g, '<strong>$1</strong>');
+            
+            return text;
+        }
+
+
+        async function sendMessage() {
+            const input = document.getElementById('userInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            // Hide example prompts
+            document.getElementById('examplePrompts').style.display = 'none';
+            
+            // Add user message to UI
+            addMessage(message, 'user');
+            input.value = '';
+            
+            // Disable input while processing
+            const sendButton = document.getElementById('sendButton');
+            sendButton.disabled = true;
+            sendButton.textContent = 'Lädt...';
+            input.disabled = true;
+            
+            // Show typing indicator
+            const typingId = addTypingIndicator();
+            
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        conversation_history: conversationHistory
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                // Remove typing indicator
+                removeTypingIndicator(typingId);
+                
+                // Add bot response
+                addMessage(formatResponse(data.response), 'bot');
+                
+                // Update conversation history
+                conversationHistory = data.conversation_history;
+                
+            } catch (error) {
+                removeTypingIndicator(typingId);
+                addMessage(`❌ Fehler: ${error.message}<br><br>Bitte stelle sicher, dass der Backend-Server läuft (http://localhost:8000)`, 'bot');
+                console.error('Chat error:', error);
+            }
+            
+            // Re-enable input
+            sendButton.disabled = false;
+            sendButton.textContent = 'Senden';
+            input.disabled = false;
+            input.focus();
+        }
+
+        function addMessage(text, sender) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}-message`;
+            messageDiv.innerHTML = text;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function addTypingIndicator() {
+            const messagesDiv = document.getElementById('chatMessages');
+            const typingDiv = document.createElement('div');
+            const typingId = 'typing-' + Date.now();
+            typingDiv.id = typingId;
+            typingDiv.className = 'message bot-message';
+            typingDiv.innerHTML = `
+                <div class="typing-indicator">
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                </div>
+            `;
+            messagesDiv.appendChild(typingDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            return typingId;
+        }
+
+        function removeTypingIndicator(typingId) {
+            const typingDiv = document.getElementById(typingId);
+            if (typingDiv) {
+                typingDiv.remove();
+            }
+        }
+
+        // Focus input on load
+        window.onload = () => {
+            document.getElementById('userInput').focus();
+        };
+    </script>
+</body>
+</html>

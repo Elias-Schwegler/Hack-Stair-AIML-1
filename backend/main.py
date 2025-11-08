@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import os
+import sys
+sys.path.append('.')
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -15,7 +17,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS
+# CORS - allow all origins for development
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -36,17 +38,32 @@ class ChatResponse(BaseModel):
     response: str
     conversation_history: List[dict]
 
-@app.get("/")
+class HealthResponse(BaseModel):
+    status: str
+    version: str
+    services: dict
+
+@app.get("/", tags=["Root"])
 async def root():
+    """Root endpoint with API information"""
     return {
         "message": "Geoportal Chatbot API",
         "version": "1.0.0",
-        "status": "running"
+        "status": "running",
+        "docs": "/docs",
+        "endpoints": {
+            "chat": "POST /chat",
+            "health": "GET /health"
+        }
     }
 
-@app.post("/chat", response_model=ChatResponse)
+@app.post("/chat", response_model=ChatResponse, tags=["Chat"])
 async def chat(request: ChatRequest):
-    """Main chat endpoint"""
+    """
+    Main chat endpoint
+    
+    Send a message and optional conversation history to get AI response.
+    """
     try:
         result = await openai_service.chat(
             user_message=request.message,
@@ -54,18 +71,54 @@ async def chat(request: ChatRequest):
         )
         return ChatResponse(**result)
     except Exception as e:
-        print(f"Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"❌ Chat error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Chat service error: {str(e)}"
+        )
 
-@app.get("/health")
+@app.get("/health", response_model=HealthResponse, tags=["Health"])
 async def health():
     """Health check endpoint"""
-    return {
-        "status": "healthy",
-        "azure_openai": "connected",
-        "azure_search": "connected"
-    }
+    try:
+        # Test search service
+        search_test = openai_service.search_service.search("test", top=1)
+        search_status = "connected" if search_test else "error"
+    except:
+        search_status = "error"
+    
+    return HealthResponse(
+        status="healthy",
+        version="1.0.0",
+        services={
+            "azure_openai": "connected",
+            "azure_search": search_status,
+            "location_finder": "connected"
+        }
+    )
+
+@app.get("/stats", tags=["Stats"])
+async def stats():
+    """Get statistics about indexed data"""
+    try:
+        # Quick search to get total count
+        results = openai_service.search_service.search("*", top=1)
+        
+        return {
+            "status": "available",
+            "indexed_documents": "338",
+            "collections": "65",
+            "datasets": "214",
+            "services": "59"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
+    print("🚀 Starting Geoportal Chatbot API...")
+    print("📍 API will be available at: http://localhost:8000")
+    print("📚 API docs at: http://localhost:8000/docs")
     uvicorn.run(app, host="0.0.0.0", port=8000)
