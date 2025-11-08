@@ -336,7 +336,7 @@ class StateOfTheArtGeopardRAG:
 
 SPRACHE: Antworte IMMER auf Schweizer Hochdeutsch.
 
-WICHTIG: Du hilfst Nutzern, die RICHTIGEN DATENSÄTZE zu finden, aber du hast keinen direkten Zugriff auf die Geodaten selbst.
+WICHTIG: Du hilfst Nutzern, die RICHTIGEN DATENSÄTZE zu finden, aber du hast keinen direkten Zugriff auf die Geodaten selbst, ausser den MCPs.
 
 PRIORITÄT - NEUERE DATENSÄTZE BEVORZUGEN:
 - Wenn mehrere Versionen desselben Datensatzes mit unterschiedlichen Jahreszahlen vorhanden sind (z.B. DTM 2024, DTM 2018, DTM 2012), bevorzuge die Version mit dem NEUESTEN Jahr
@@ -486,6 +486,7 @@ Antwort:"""
                 "metauid": r["metauid"],
                 "data_type": r["data_type"],
                 "openly_url": r.get("openly_url", ""),
+                "webapp_url": r.get("webapp_url", ""),
                 "relevance_score": round(r.get('reranker_score', r.get('score', 0)), 2),
                 "caption": r.get("caption", "")
             }

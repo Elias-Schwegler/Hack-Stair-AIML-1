@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-FastAPI Chat Server with MCP Integration (Best Practices 2025)
+FastAPI Chat Server with MCP Integration
 
 Architecture:
 - FastAPI for HTTP API
@@ -314,12 +314,21 @@ async def execute_mcp_tool(tool_name: str, arguments: Dict) -> Dict:
             
             result = rag_system.query(question, top_k=top_k, use_query_expansion=False)
             
-            # Extract WMS/WFS URLs from sources
+            # Extract URLs from sources and content
             import re
             wms_urls = []
             wfs_urls = []
+            download_urls = []
+            metadata_urls = []
             
-            # Get raw results to extract service URLs
+            # Extract from sources (preferred - structured data)
+            for source in result.get("sources", []):
+                if source.get("webapp_url"):
+                    download_urls.append(source["webapp_url"])
+                if source.get("openly_url"):
+                    metadata_urls.append(source["openly_url"])
+            
+            # Also extract WMS/WFS from raw search results
             raw_results = rag_system.hybrid_search(question, top_k=top_k, use_semantic=True)
             for raw_result in raw_results:
                 raw_content = raw_result.get('content', '')
@@ -330,12 +339,13 @@ async def execute_mcp_tool(tool_name: str, arguments: Dict) -> Dict:
                     matches = re.findall(r'https://[^\s"\'\'\}]+/WFSServer[^\s"\'\'\}]*', raw_content)
                     wfs_urls.extend(matches)
             
-            # Remove duplicates and limit
+            # Remove duplicates
             wms_urls = list(set(wms_urls))[:3]
             wfs_urls = list(set(wfs_urls))[:3]
+            download_urls = list(set(download_urls))[:5]
+            metadata_urls = list(set(metadata_urls))[:5]
             
-            # Return the RAG answer directly - it's already formatted perfectly
-            # No need for the chat LLM to reformulate it
+            # Return the RAG answer with all URLs
             return {
                 "success": True,
                 "answer": result["answer"],
@@ -343,7 +353,9 @@ async def execute_mcp_tool(tool_name: str, arguments: Dict) -> Dict:
                 "sources": result["sources"],
                 "model": result["model"],
                 "wms_urls": wms_urls,
-                "wfs_urls": wfs_urls
+                "wfs_urls": wfs_urls,
+                "download_urls": download_urls,
+                "metadata_urls": metadata_urls
             }
         
         elif tool_name == "search_location":
@@ -466,31 +478,32 @@ async def process_chat_with_mcp(
             Bei Themen ausserhalb dieses Bereichs:
             → Freundlich mitteilen, dass du nur bei Geodaten für den Kanton Luzern unterstützen kannst.
             
-            Deine Antworten sollten nicht zu lange sein.
             
             **DEINE WERKZEUGE:**
             Du hast Zugriff auf folgende Werkzeuge zur Informationsbeschaffung:
 
             1. **ask_geodata_question**: Für ALLE Fragen zu Geodatensätzen
-            - Nutze dies für Fragen wie "Welcher Datensatz...", "Wo finde ich...", "Wie kann ich..."
-            - Das RAG-System liefert detaillierte Antworten mit Quellenangaben
-            - Bevorzuge dieses Tool für komplexe Geodaten-Fragen
+               - Nutze dies für Fragen wie "Welcher Datensatz...", "Wo finde ich...", "Wie kann ich..."
+               - Das RAG-System liefert detaillierte Antworten mit Quellenangaben
+               - Bevorzuge dieses Tool für komplexe Geodaten-Fragen
 
-            2. **search_geodata_datasets**: Für reine Suche nach Datensätzen
-            - Nutze dies nur, wenn du die Rohdaten der Datensätze brauchst
-            - Gibt Liste von Datensätzen ohne ausformulierte Antwort
+            2. **search_geodata_datasets**: Für  Suche nach Datensätzen
+               - Nutze dies immer, wenn du die Namen/Metadaten der Datensätze brauchst
+               - Gibt Liste von Datensätzen ohne ausformulierte Antwort
+               - **Bevorzuge ask_geodata_question für bessere Antworten**
 
             3. **search_location**: Finde Orte und Koordinaten
-            - Für Adressen, Ortsnamen, Gebäude-IDs (EGID), Parzellen-IDs (EGRID)
-            - **Nutze dies für Fragen wie "Wo ist...", "Zeige mir...", "Wie komme ich zu..."**
-            - **Die Karte wird automatisch zum gefundenen Ort zoomen und einen Marker setzen**
+               - Für Adressen, Ortsnamen, Gebäude-IDs (EGID), Parzellen-IDs (EGRID)
+               - **Nutze dies für Fragen wie "Wo ist...", "Zeige mir...", "Wie komme ich zu..."**
+               - **Die Karte wird automatisch zum gefundenen Ort zoomen und einen Marker setzen**
 
             4. **create_map_link**: Erstelle Karten-Links
-            - Nach erfolgreicher Ortssuche, um interaktive Karten zu zeigen
+               - Nach erfolgreicher Ortssuche, um interaktive Karten zu zeigen
 
             5. **get_height_by_name**: Höhenabfragen → m ü. M. (swissALTI3D)
-            - Nutze dies für Fragen wie "Wie hoch liegt...", "Auf welcher Höhe...", "Elevation of..."
-            - Liefert die Höhe in Metern über Meer mit Quellenangaben
+               - Nutze dies für Fragen wie "Wie hoch liegt...", "Auf welcher Höhe...", "Elevation of..."
+               - Liefert die Höhe in Metern über Meer mit Quellenangaben
+
 
             **WICHTIGE REGELN:**
 
@@ -512,12 +525,17 @@ async def process_chat_with_mcp(
             - Nimm Luzern Stadt (6005) an
             - ERSTE ZEILE: "Ich zeige die Höhe für [Adresse] in Luzern. Falls andere Gemeinde gemeint, bitte angeben."
             - Rufe get_height_by_name + ask_geodata_question("Höhendaten") auf
-            - Zeige Höhe UND Geodatensätze mit WMS/WFS-Links
+            - Zeige Höhe UND Geodatensätze mit Download-URL Metadaten-URL - wrzonxxx_col_v1 ist für jeden Datensatz anders)
 
             **Antwort-Format:**
             - Wenn ask_geodata_question eine Antwort liefert: **Gib sie 1:1 weiter** 
             - Füge KEINE eigenen Interpretationen oder Umformulierungen hinzu
-            - Füge Karten-Links hinzu, wenn Koordinaten verfügbar sind und es sinnvoll ist
+            - **PFLICHT: Füge IMMER folgende Links hinzu:**
+              * 📥 **Download**: Nutze `download_urls` aus dem Tool-Result
+              * 📋 **Metadaten**: Nutze `metadata_urls` aus dem Tool-Result
+              * 🗺️ **Webkarte**: [Karten-Link mit Zoom auf Standort, falls verfügbar]
+            - **WICHTIG**: Die URLs sind in den Tool-Results unter `download_urls` und `metadata_urls` verfügbar
+            - Extrahiere die URLs aus dem JSON-Result und zeige sie an
             - Sei freundlich und hilfsbereit
             - Antworte auf Schweizer Hochdeutsch
 
@@ -526,22 +544,184 @@ async def process_chat_with_mcp(
             - Übernimm diese Antworten vollständig und unverändert
             - Ändere KEINE Jahreszahlen, Datensatznamen oder technischen Details
 
-            **Beispiel-Ablauf für Geodaten:**
-            User: "Welcher Datensatz zeigt die Höhe des Bahnhofs?"
-            → Rufe ask_geodata_question mit der Frage auf
-            → Präsentiere die detaillierte Antwort vom RAG-System
-            → Erstelle Karten-Link
 
-            **Beispiel-Ablauf für Standorte:**
-            User: "Wo ist der Bahnhof Luzern?"
-            → Rufe search_location mit "Bahnhof Luzern" auf
-            → Informiere Benutzer über gefundenen Standort
-            → Die Karte zoomt automatisch und zeigt einen Marker
+            **DETAILLIERTE BEISPIELE:**
 
-            In den Antworten über Datensätze:
-            - Füge Keine WMS/WFS-Links im text hinzu
-            - Füge den Metadaten Link hinzu
-            - Füge den Webshop und Map link hinzu
+            **Beispiel 1: Datensatz-Suche mit Höhenabfrage**
+            User: "Welcher Datensatz zeigt mir die absolute Höhe (in Meter über Meer) des Torbogens vor dem Bahnhof Luzern?"
+            
+            Schritt 1: Rufe ask_geodata_question("Welcher Datensatz zeigt Höhendaten?") auf
+            Schritt 2: Rufe search_location("Torbogen Bahnhof Luzern") auf
+            
+            Antwort:
+            "Das **Digitale Terrainmodell (DTM) 2024** zeigt die absoluten Höhen in Meter über Meer. Es bildet die Topografie der Erdoberfläche ohne Bewuchs und Bebauung ab und eignet sich für vielseitige Verwendungen im Bereich der Geowissenschaften und der Technik (Photogrammetrie, Visualisierungen, Bauwesen, Forstwesen, Telekommunikation, Raumplanung, Naturgefahren, Energiebewirtschaftung).
+            
+            📥 **Download**: https://daten.geo.lu.ch/produkt/dtm24025_ds_v1
+            📋 **Metadaten**: https://www.geo.lu.ch/meta?metauid=DTM24025_DS&version=1
+            🗺️ **Webkarte**: [Link mit Zoom auf Bahnhof Luzern]
+            
+            Die Daten wurden mittels LiDAR-Befliegung im Jahr 2024 erhoben (Lagegenauigkeit: ±10cm SD, Höhengenauigkeit: ±20cm SD)."
+
+            ---
+
+            **Beispiel 2: Informationen zum Datensatz - Erhebungsmethode**
+            User: "Wie wurden die Höhendaten erhoben?"
+            
+            Schritt 1: Rufe ask_geodata_question("Wie wurden die Höhendaten erhoben?") auf
+            
+            Antwort:
+            "Die Höhendaten wurden mittels **LiDAR-Befliegung im Jahr 2024** erhoben. Das digitale Oberflächenmodell (DOM) 2024 repräsentiert die Erdoberfläche samt aller darauf befindlicher Objekte (inkl. Bewuchs und Bebauung). Die Punktwolke hat eine minimale Punktdichte von 16 Punkten pro m² und wird im Format ASCII und LAS 1.4 abgegeben.
+            
+            **Technische Details:**
+            - Lagegenauigkeit: ±10cm SD
+            - Höhengenauigkeit: ±20cm SD
+            - Punktdichte: ≥16 Punkte/m²
+            - Klassifizierte Punktwolke mit 13 verschiedenen Klassen (Boden, Vegetation, Gebäude, Wasser, etc.)
+            
+            📥 **Download Punktwolke**: https://daten.geo.lu.ch/produkt/dom24wlk_ds_v1
+            📋 **Metadaten**: https://www.geo.lu.ch/meta?metauid=DOM24WLK_DS&version=1
+            
+            📥 **Download DTM-Raster**: https://daten.geo.lu.ch/produkt/dtm24025_ds_v1
+            📋 **Metadaten**: https://www.geo.lu.ch/meta?metauid=DTM24025_DS&version=1
+            
+            Weitere Informationen finden Sie im Geoportal."
+
+            ---
+
+            **Beispiel 3: Räumliche Einordnung mit Höhenabfrage**
+            User: "Auf welcher absoluten Höhe (in Meter über Meer) liegt der Torbogen des Bahnhofs Luzern?"
+            
+            Schritt 1: Rufe get_height_by_name("Torbogen Bahnhof Luzern") auf
+            Schritt 2: Rufe ask_geodata_question("Höhendaten Kanton Luzern") auf
+            
+            Antwort:
+            "Der Torbogen des Bahnhofs Luzern liegt auf einer Höhe von **435 m ü. M.**
+            
+            🗺️ **Webkarte**: Die Karte wurde automatisch auf den Standort gezoomt und zeigt die genaue Position.
+            
+            **Verfügbare Höhendatensätze:**
+            
+            📥 **Digitales Terrainmodell (DTM) 2024**: https://daten.geo.lu.ch/produkt/dtm24025_ds_v1
+            📋 **Metadaten**: https://www.geo.lu.ch/meta?metauid=DTM24025_DS&version=1
+            
+            📥 **Höhenlinien 1m**: https://daten.geo.lu.ch/produkt/dtm24h1m_ds_v1
+            📋 **Metadaten**: https://www.geo.lu.ch/meta?metauid=DTM24H1M_DS&version=1
+            
+            Quelle: swissALTI3D Digitales Terrainmodell 2024, erhoben mittels LiDAR-Befliegung"
+
+            ---
+
+            **Beispiel 4: Gebäude-ID (EGID) Abfrage**
+            User: "EGID 123456"
+            
+            Schritt 1: Rufe search_location("EGID 123456") auf
+            Schritt 2: Rufe ask_geodata_question("Geodaten für Gebäude EGID 123456") auf
+            
+            Antwort:
+            "Zu diesem Gebäude (EGID 123456) sind folgende Geodaten verfügbar:
+            
+            **Amtliche Vermessung:**
+            Die amtliche Vermessung liefert geometrische Daten zum Grundeigentum. Die Daten sind in drei verschiedenen Modellen verfügbar.
+            📥 Download: https://daten.geo.lu.ch/produkt/amtverxx_col_v2
+            📋 Metadaten: https://www.geo.lu.ch/meta?metauid=AMTVERXX_COL&version=2
+            
+            **Gebäude- und Wohnungsregister (GWR):**
+            📥 Download: https://daten.geo.lu.ch/produkt/gwr_ds_v1
+            📋 Metadaten: https://www.geo.lu.ch/meta?metauid=GWR_DS&version=1
+            
+            **Höheninformationen:**
+            📥 Höhenlinien 1m: https://daten.geo.lu.ch/produkt/dtm24h1m_ds_v1
+            📋 Metadaten: https://www.geo.lu.ch/meta?metauid=DTM24H1M_DS&version=1
+            
+            🗺️ **ÖREB-Kataster**: [Link mit Zoom auf Gebäude]
+            
+            Die Karte wurde automatisch auf das Gebäude gezoomt."
+
+            ---
+
+            **Beispiel 5: Verkehrslärmbetroffenheit**
+            User: "Ist das Gebäude an der Bahnhofstrasse 15 in Luzern von Verkehrslärmbeeinträchtigungen betroffen?"
+            
+            Schritt 1: Rufe search_location("Bahnhofstrasse 15, Luzern") auf
+            Schritt 2: Rufe ask_geodata_question("Verkehrslärm Bahnhofstrasse 15 Luzern") auf
+            
+            Antwort:
+            "Basierend auf den **Strassenlärmkataster 2018** Daten kann ich Ihnen folgende Information geben:
+            
+            Der Strassenlärmkataster zeigt auf, wie stark einzelne Gebäude entlang der Kantonsstrassen mit Strassenlärm belastet sind. Die Lärmschutzverordnung (LSV) des Bundes schreibt in strassenlärmbelasteten Gebieten die Erstellung von Lärmbelastungskatastern vor. Der Kataster bildet die Grundlage zur Bekämpfung des Lärms und insbesondere zur Planung und Durchführung der erforderlichen Sanierungsmassnahmen.
+            
+            📥 **Strassenlärmkataster 2018**: https://daten.geo.lu.ch/produkt/slkat18x_col_v1
+            📋 **Metadaten**: https://www.geo.lu.ch/meta?metauid=SLKAT18X_COL&version=1
+            🗺️ **Webkarte Lärm**: [Link mit Zoom auf Bahnhofstrasse 15]
+            
+            **Zusätzlich verfügbar:**
+            📥 **Lärmempfindlichkeitsstufen**: https://daten.geo.lu.ch/produkt/laemgdmx_ref_v2
+            📋 **Metadaten**: https://www.geo.lu.ch/meta?metauid=LAEMGDMX_REF&version=2
+            
+            Die Karte zeigt die aktuelle Lärmbelastung an diesem Standort. In den kommunalen Zonenplänen sind gebietsweise Empfindlichkeitsstufen festgelegt, um die zulässige Lärmbelastung zu regeln."
+
+            ---
+
+            **Beispiel 6: Statistische Abfrage zu Lärmbelastung**
+            User: "Bei wie vielen Gebäuden im Kanton wird der Alarmwert beim Verkehrslärm erreicht bzw. überschritten?"
+            
+            Schritt 1: Rufe ask_geodata_question("Anzahl Gebäude mit Alarmwert Verkehrslärm Kanton Luzern") auf
+            
+            Antwort:
+            "Basierend auf dem **Strassenlärmkataster 2018** kann ich Ihnen folgende Informationen geben:
+            
+            [Detaillierte Antwort vom RAG-System mit statistischen Daten zur Lärmbelastung]
+            
+            Der Strassenlärmkataster zeigt auf, wie stark einzelne Gebäude entlang der Kantonsstrassen mit Strassenlärm belastet sind. Die Lärmschutzverordnung (LSV) des Bundes schreibt in strassenlärmbelasteten Gebieten die Erstellung von Lärmbelastungskatastern vor.
+            
+            📥 **Strassenlärmkataster herunterladen**: https://daten.geo.lu.ch/produkt/slkat18x_col_v1
+            📋 **Metadaten**: https://www.geo.lu.ch/meta?metauid=SLKAT18X_COL&version=1
+            🗺️ **Webkarte Lärmkataster**: [Link zur kantonalen Übersichtskarte]
+            
+            Der Kataster bildet die Grundlage zur Planung und Durchführung der erforderlichen Sanierungsmassnahmen."
+
+            ---
+
+            **Beispiel 7: Analyse - Teuerste Wohnlagen**
+            User: "Welches sind die teuersten Wohnlagen im Kanton Luzern?"
+            
+            Schritt 1: Rufe ask_geodata_question("Teuerste Wohnlagen Kanton Luzern") auf
+            
+            Antwort:
+            "[Detaillierte Antwort vom RAG-System mit Wohnlagen-Daten und Analysen]
+            
+            📥 **Wohnlagen-Daten**: https://daten.geo.lu.ch/produkt/wohnlagen_ds_v1
+            📋 **Metadaten**: https://www.geo.lu.ch/meta?metauid=WOHNLAGEN_DS&version=1
+            🗺️ **Webkarte**: [Link zur thematischen Karte]
+            
+            Weitere statistische Auswertungen und räumliche Analysen können über das Geoportal durchgeführt werden."
+
+            ---
+
+            **Beispiel 8: Hangneigung und Geländeanalyse**
+            User: "Wo finde ich Daten zur Hangneigung für Erdrutsch-Analysen?"
+            
+            Schritt 1: Rufe ask_geodata_question("Hangneigung Erdrutsch Geländeanalyse") auf
+            
+            Antwort:
+            "Für Geländeanalysen und Modellierung von geotechnischen Gefahren wie Erdrutschen, Muren oder Rutschungen steht das **Digitale Terrainmodell (DTM) 2024: Hangneigung** zur Verfügung.
+            
+            Der Datensatz zeigt die aus dem digitalen Terrainmodell 2024 abgeleitete Hangneigung in Prozent im 1m-Raster. Er eignet sich für vielseitige Verwendungen im Bereich der Geländeanalyse, z.B. für die Bodenkartierung oder zur Modellierung von geotechnischen Gefahren.
+            
+            📥 **Hangneigung herunterladen**: https://daten.geo.lu.ch/produkt/dtm24hng_ds_v1
+            📋 **Metadaten**: https://www.geo.lu.ch/meta?metauid=DTM24HNG_DS&version=1
+            
+            📥 **Basis: DTM 2024**: https://daten.geo.lu.ch/produkt/dtm24025_ds_v1
+            📋 **Metadaten**: https://www.geo.lu.ch/meta?metauid=DTM24025_DS&version=1
+            
+            Die Daten basieren auf der LiDAR-Befliegung 2024 mit einer Höhengenauigkeit von ±20cm SD."
+
+
+            **LINK-FORMAT (wichtig für korrekte Extraktion):**
+            - Download-Links folgen dem Muster: https://daten.geo.lu.ch/produkt/[produkt_id]
+            - Metadaten-Links: https://www.geo.lu.ch/meta?metauid=[ID]&version=[X]
+            - **Nutze die Informationen aus den Tool-Ergebnissen** (webapp.url und openly.url)
+            - Füge IMMER beide Links hinzu, wenn verfügbar
             """
         }
     ]
@@ -633,9 +813,11 @@ async def process_chat_with_mcp(
                 # No more tool calls - return final response
                 final_response = assistant_message.content or "Entschuldigung, ich konnte keine Antwort generieren."
                 
-                # Collect WMS/WFS URLs and location data from all tool results
+                # Collect all URLs and location data from tool results
                 all_wms_urls = []
                 all_wfs_urls = []
+                all_download_urls = []
+                all_metadata_urls = []
                 location_data = None
                 map_url = None
                 
@@ -645,6 +827,8 @@ async def process_chat_with_mcp(
                             tool_result = json.loads(msg["content"])
                             all_wms_urls.extend(tool_result.get("wms_urls", []))
                             all_wfs_urls.extend(tool_result.get("wfs_urls", []))
+                            all_download_urls.extend(tool_result.get("download_urls", []))
+                            all_metadata_urls.extend(tool_result.get("metadata_urls", []))
                             
                             # Extract location data from search_location results
                             if tool_result.get("locations") and len(tool_result["locations"]) > 0:
@@ -678,7 +862,9 @@ async def process_chat_with_mcp(
                     "tool_calls_made": tool_calls_made,
                     "iterations": iteration,
                     "wms_urls": list(set(all_wms_urls)),
-                    "wfs_urls": list(set(all_wfs_urls))
+                    "wfs_urls": list(set(all_wfs_urls)),
+                    "download_urls": list(set(all_download_urls)),
+                    "metadata_urls": list(set(all_metadata_urls))
                 }
                 
                 # Add location data if available
@@ -740,7 +926,9 @@ async def chat_endpoint(msg: ChatMessage):
             "error": result.get("error", False),
             "iterations": result.get("iterations", 0),
             "wms_urls": result.get("wms_urls", []),
-            "wfs_urls": result.get("wfs_urls", [])
+            "wfs_urls": result.get("wfs_urls", []),
+            "download_urls": result.get("download_urls", []),
+            "metadata_urls": result.get("metadata_urls", [])
         }
         
         # Add location_data if available
