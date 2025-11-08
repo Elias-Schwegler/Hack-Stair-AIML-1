@@ -8,6 +8,7 @@ import xml.etree.ElementTree as ET
 sys.path.append('.')
 from .azure_search_service import AzureSearchService
 from .location_service import LocationService
+from .geo_service import GeoService
 
 class AzureOpenAIService:
     def __init__(self):
@@ -21,39 +22,79 @@ class AzureOpenAIService:
         # Initialize other services
         self.search_service = AzureSearchService()
         self.location_service = LocationService()
+        self.geo_service = GeoService()
     
     def _get_system_prompt(self) -> str:
         return """Du bist ein hilfsbereiter Assistent für das Geoportal des Kantons Luzern.
-        Deine Aufgaben:
-        1. Helfe Nutzern, die richtigen Geodatensätze zu finden
-        2. Beantworte Fragen zu Geodaten und deren Metadaten
-        3. Finde Standorte und verlinke zu passenden Karten
-        4. Gib immer die Quellen (URLs zu Metadaten und Geodatashop) an
 
-        Verfügbare Tools:
-        - search_metadata: Suche nach Geodatensätzen in der Metadatenbank
-        - resolve_location: Finde Koordinaten für Adressen, Orte, Gebäude (EGID), Grundstücke (EGRID)
-        - generate_map_url: Erstelle Links zu interaktiven Webkarten mit Marker
+            Deine Aufgaben:
+            1. Helfe Nutzern, die richtigen Geodatensätze zu finden
+            2. Beantworte Fragen zu Geodaten und deren Metadaten
+            3. Finde Standorte und verlinke zu passenden Karten
+            4. Rufe tatsächliche Höhenwerte ab wenn möglich
+            5. Gib immer die Quellen (URLs zu Metadaten und Geodatashop) an
 
-        WICHTIG - Wann welches Tool verwenden:
-        - Bei Fragen nach "Welcher Datensatz..." → search_metadata verwenden
-        - Bei Fragen nach "Wo liegt..." oder "Auf welcher Höhe..." → ZUERST resolve_location, DANN search_metadata für passende Daten, DANN generate_map_url
-        - Bei Fragen nach "Informationen über..." → search_metadata verwenden
+            Verfügbare Tools:
+            - search_metadata: Suche nach Geodatensätzen in der Metadatenbank
+            - resolve_location: Finde Koordinaten für Adressen, Orte, Gebäude (EGID), Grundstücke (EGRID)
+            - get_elevation: Hole die tatsächliche Höhe (m ü. M.) an einem Standort
+            - generate_map_url: Erstelle Links zu interaktiven Webkarten mit Marker
 
-        Antwort-Format:
-        - Gib immer konkrete Links zu Metadaten und Geodatashop an
-        - Bei Standort-Fragen: Koordinaten nennen UND Webkarten-Link erstellen
-        - Bei Höhenfragen: Erkläre, welcher Datensatz die Höhe zeigt (z.B. DTM) und wie man sie abrufen kann
-        - Zitiere die Datenquellen klar
+            WICHTIG - Wann welches Tool verwenden:
+            - Bei Fragen nach "Welcher Datensatz..." → search_metadata verwenden
+            - Bei Fragen nach "Wo liegt..." → resolve_location, dann generate_map_url
+            - Bei Fragen nach "Auf welcher Höhe..." oder "Höhenmeter von..." → 
+            1. resolve_location (Koordinaten finden)
+            2. get_elevation (tatsächliche Höhe abrufen)
+            3. search_metadata("Höhendaten DTM") (Datensatz-Info)
+            4. generate_map_url (Karten-Link)
+            - Bei Fragen nach "Informationen über..." → search_metadata verwenden
 
-        Beispiele:
-        Frage: "Auf welcher Höhe liegt der Bahnhof Luzern?"
-        1. resolve_location("Bahnhof Luzern")
-        2. search_metadata("Höhendaten Terrain DTM")
-        3. generate_map_url mit den gefundenen Koordinaten
-        Antwort: "Der Bahnhof Luzern liegt bei Koordinaten X: 2667123, Y: 1212345. Um die genaue Höhe abzufragen, nutze den Datensatz 'Digitales Terrainmodell (DTM)'. [Link zur Karte mit Marker]"
+            Antwort-Format:
+            - Gib immer konkrete Links zu Metadaten und Geodatashop an
+            - Bei Standort-Fragen: Koordinaten nennen UND Webkarten-Link erstellen
+            - Bei Höhenfragen: Tatsächliche Höhe in m ü. M., Koordinaten, DTM-Datensatz-Info und Links
+            - Zitiere die Datenquellen klar
 
-        Antworte auf Deutsch, präzise und hilfreich."""
+            Beispiele:
+
+            Frage: "Auf welcher Höhe liegt der Bahnhof Luzern?"
+            Tool-Reihenfolge:
+            1. resolve_location("Bahnhof Luzern") → Koordinaten erhalten
+            2. get_elevation(coordinates) → Höhe abrufen
+            3. search_metadata("Höhendaten Terrain DTM") → Datensatz finden
+            4. generate_map_url(coordinates) → Karten-Link erstellen
+
+            Antwort: "Der Bahnhof Luzern liegt auf einer Höhe von 436 m ü. M. (Koordinaten: X: 2667100, Y: 1212500).
+
+            Diese Information stammt vom Digitalen Terrainmodell (DTM) 2024.
+
+            🗺️ Auf Karte anzeigen: [Link zur Webkarte mit Marker]
+            📄 Metadaten zum DTM-Datensatz: [Link zu Metadaten]
+            🛒 DTM-Daten herunterladen: [Link zum Geodatashop]"
+
+            Frage: "Welcher Datensatz zeigt mir Höhendaten?"
+            Tool-Reihenfolge:
+            1. search_metadata("Höhendaten DTM Terrain")
+
+            Antwort: "Für Höhendaten empfehle ich den Datensatz 'Digitales Terrainmodell (DTM) 2024'. 
+            [Metadaten-Link]
+            [Geodatashop-Link]"
+
+            Frage: "Wo liegt Sursee?"
+            Tool-Reihenfolge:
+            1. resolve_location("Sursee", "Gemeinde")
+            2. generate_map_url(coordinates)
+
+            Antwort: "Sursee liegt bei den Koordinaten X: 2642500, Y: 1228500.
+            🗺️ Auf Karte anzeigen: [Link]"
+
+            WICHTIG: 
+            - Verwende IMMER get_elevation wenn nach Höhe/Höhenmetern gefragt wird
+            - Wenn get_elevation keine Daten liefert, erkläre wie man die Höhe über den DTM-Datensatz abrufen kann
+            - Gib bei Höhenfragen IMMER alle vier Informationen: Höhenwert, Koordinaten, Datensatz-Info, Links
+
+            Antworte auf Deutsch, präzise und hilfreich."""
 
     def _get_tools(self) -> List[Dict]:
         map_id = []
@@ -115,6 +156,28 @@ class AzureOpenAIService:
                             }
                         },
                         "required": ["location"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_elevation",
+                    "description": "Hole die tatsächliche Höhe (in Meter über Meer) an einem Standort. Verwende dies NACH resolve_location wenn der Nutzer nach der Höhe fragt.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "coords": {
+                                "type": "object",
+                                "description": "Koordinaten im LV95 System (aus resolve_location)",
+                                "properties": {
+                                    "x": {"type": "number", "description": "X-Koordinate"},
+                                    "y": {"type": "number", "description": "Y-Koordinate"}
+                                },
+                                "required": ["x", "y"]
+                            }
+                        },
+                        "required": ["coords"]
                     }
                 }
             },
@@ -229,6 +292,29 @@ class AzureOpenAIService:
                         "location_query": location
                     }, ensure_ascii=False)
             
+            elif tool_name == "get_elevation":
+                coords_dict = arguments.get("coords")
+                coords = (coords_dict['x'], coords_dict['y'])
+                
+                result = await self.geo_service.get_elevation_at_point(coords)
+                
+                if result.get('success'):
+                    return json.dumps({
+                        "status": "success",
+                        "elevation": result.get('elevation'),
+                        "unit": result.get('unit', 'm ü. M.'),
+                        "coordinates": coords,
+                        "source": result.get('source', 'DTM'),
+                        "message": f"Die Höhe beträgt {result.get('elevation')} {result.get('unit', 'm ü. M.')}"
+                    }, ensure_ascii=False, indent=2)
+                else:
+                    return json.dumps({
+                        "status": "unavailable",
+                        "message": result.get('message', 'Höhendaten nicht verfügbar'),
+                        "note": "Der Nutzer kann die Höhe über den DTM-Datensatz im Geodatashop abrufen.",
+                        "coordinates": coords
+                    }, ensure_ascii=False)
+
             elif tool_name == "generate_map_url":
                 map_id = arguments.get("map_id", "/objekte/grundbuchplan/")
                 coords_dict = arguments.get("coords")
