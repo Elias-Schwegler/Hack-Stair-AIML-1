@@ -48,8 +48,21 @@ notepad .env
 
 ```powershell
 docker compose build
+
 docker compose up -d
 ```
+
+### stop and remove containers, images and volumes created by compose
+```powershell
+docker compose down --rmi all --volumes --remove-orphans
+```
+
+### build without cache and pull latest base images
+```powershell
+docker compose build --no-cache --pull
+```
+
+
 
 3) Follow logs (optional):
 
