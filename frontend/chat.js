@@ -9,9 +9,9 @@ let conversationHistory = [];
 // Predetermined prompt suggestions
 const promptSuggestions = [
     {
-        icon: "🗺️",
-        text: "Welche Höhendaten gibt es im Kanton Luzern?",
-        category: "Geodaten"
+        icon: "🚂",
+        text: "Wo liegt der Bahnhof Luzern? Auf wie viel Höhenmetern über dem Meer?",
+        category: "Location"
     },
     {
         icon: "🐝",
@@ -19,8 +19,8 @@ const promptSuggestions = [
         category: "Location"
     },
     {
-        icon: "🌳",
-        text: "Zeige mir Naturschutzgebiete auf der Karte",
+        icon: "🛑",
+        text: "Zeige mir Gefahrengebiete auf der Karte",
         category: "Visualisierung"
     }
 ];
