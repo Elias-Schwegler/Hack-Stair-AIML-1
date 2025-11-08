@@ -10,17 +10,17 @@ let conversationHistory = [];
 const promptSuggestions = [
     {
         icon: "🚂",
-        text: "Wo liegt der Bahnhof Luzern? Auf wie viel Höhenmetern über dem Meer?",
+        text: "Wo genau steht der Bahnhof Luzern? Und wie viele Höhenmeter über Meer muss ich da hochklettern? 🏔️",
         category: "Location"
     },
     {
         icon: "🐝",
-        text: "Zeig mir Bienenstandorte in Luzern.",
+        text: "Zeig mir, wo die fleissigen Bienchen in Luzern ihren Honig produzieren! 🍯",
         category: "Location"
     },
     {
         icon: "🛑",
-        text: "Zeige mir Gefahrengebiete auf der Karte",
+        text: "Wo sollte ich besser nicht spazieren gehen? Zeig mir die Gefahrengebiete!",
         category: "Visualisierung"
     }
 ];
@@ -256,6 +256,11 @@ function addMessage(text, sender) {
     // Render markdown for assistant messages, plain text for user messages
     if (sender === 'assistant' && typeof marked !== 'undefined') {
         contentDiv.innerHTML = marked.parse(text);
+        // Make all links open in a new tab
+        contentDiv.querySelectorAll('a').forEach(link => {
+            link.setAttribute('target', '_blank');
+            link.setAttribute('rel', 'noopener noreferrer');
+        });
     } else {
         contentDiv.textContent = text;
     }
