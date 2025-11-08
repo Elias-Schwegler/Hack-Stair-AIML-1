@@ -6,7 +6,6 @@ Provides integration with LocationFinder API and Webmap URL generation
 import requests
 from typing import List, Dict, Optional, Tuple
 from urllib.parse import urlencode, quote
-import requests
 import xml.etree.ElementTree as ET
 
 
@@ -101,23 +100,41 @@ class WebmapURLBuilder:
     
     BASE_URL = "https://map.geo.lu.ch"
     
-    # Common map themes
+    # Map themes cache - populated on first use
+    _maps_cache = None
+    
+    @classmethod
+    def _load_maps(cls):
+        """Load available map themes from feed.xml"""
+        if cls._maps_cache is not None:
+            return cls._maps_cache
+            
+        try:
+            url = "https://map.geo.lu.ch/feed.xml"
+            r = requests.get(url, timeout=20)
+            r.raise_for_status()
+            root = ET.fromstring(r.content)
+
+            paths = []
+            for item in root.findall(".//item/link"):
+                link = (item.text or "").strip()
+                if "map.geo.lu.ch" in link:
+                    p = link.split("map.geo.lu.ch", 1)[1].lstrip("/")
+                    if p:
+                        paths.append(p)
+
+            cls._maps_cache = {f"{i:03d}_" + p.replace("/", "_"): p for i, p in enumerate(paths, 1)}
+            cls._maps_cache["default"] = "objekte/grundbuchplan"
+        except Exception as e:
+            print(f"Warning: Could not load map themes: {e}")
+            cls._maps_cache = {"default": "objekte/grundbuchplan"}
         
-    url = "https://map.geo.lu.ch/feed.xml"
-    r = requests.get(url, timeout=20)
-    r.raise_for_status()
-    root = ET.fromstring(r.content)
-
-    paths = []
-    for item in root.findall(".//item/link"):
-        link = (item.text or "").strip()
-        if "map.geo.lu.ch" in link:
-            p = link.split("map.geo.lu.ch", 1)[1].lstrip("/")
-            if p:
-                paths.append(p)
-
-    MAPS = {f"{i:03d}_" + p.replace("/", "_"): p for i, p in enumerate(paths, 1)}
-    MAPS["default"] = "objekte/grundbuchplan"
+        return cls._maps_cache
+    
+    @property
+    def MAPS(self):
+        """Get available map themes"""
+        return self._load_maps()
 
     def get_map_for_dataset(self, dataset_title: str) -> str:
         """
@@ -130,7 +147,6 @@ class WebmapURLBuilder:
             Map theme key
         """
         t = dataset_title.lower()
-        print("t",t)
         
         if any(w in t for w in ["baugesuch", "baubewilligung"]): return "objekte/baugesuche"
         elif any(w in t for w in ["grundbuch", "kataster", "parzelle", "vermess"]): return "objekte/grundbuchplan"
@@ -251,7 +267,7 @@ class WebmapURLBuilder:
         elif "vernetzung soll" in t: return "vernetzung/soll"
         elif "grundwasser schutz" in t or ("grundwasser" in t and "schutz" in t): return "grundwasser/schutz"
         elif "grundwasser vorkommen" in t or ("grundwasser" in t and "vorkommen" in t): return "grundwasser/vorkommen"
-        elif any(w in t for w in ["höhe", "hoehe","hoehen" "terrain", "dtm", "dom"]): return "hoehen"
+        elif any(w in t for w in ["höhe", "hoehe", "hoehen", "terrain", "dtm", "dom"]): return "hoehen"
         else: return "objekte/grundbuchplan"
 
     
@@ -276,8 +292,7 @@ class WebmapURLBuilder:
             Complete webmap URL
         """
         map_id = self.get_map_for_dataset(map_theme)
-        print(map_id)
-        map_path = self.MAPS.get(map_id, self.MAPS['default'])
+        map_path = self.MAPS.get(map_id, self.MAPS.get('default', 'objekte/grundbuchplan'))
         url = f"{self.BASE_URL}/{map_path}"
         
         params = []
