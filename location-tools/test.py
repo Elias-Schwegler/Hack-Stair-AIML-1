@@ -1,3 +1,7 @@
+import requests
+import xml.etree.ElementTree as ET
+import re
+
 t ='hoehen'
 def test(t):
         if any(w in t for w in ["baugesuch", "baubewilligung"]): return "objekte/baugesuche"
@@ -122,3 +126,48 @@ def test(t):
         elif any(w in t for w in ["höhe", "hoehe","hoehen" "terrain", "dtm", "dom"]): return "hoehen"
         else: return "objekte/grundbuchplan"
 print(test('hoehen'))
+
+
+     
+url = "https://map.geo.lu.ch/feed.xml"
+r = requests.get(url, timeout=20)
+r.raise_for_status()
+root = ET.fromstring(r.content)
+
+paths = []
+for item in root.findall(".//item/link"):
+    link = (item.text or "").strip()
+    if "map.geo.lu.ch" in link:
+        p = link.split("map.geo.lu.ch", 1)[1].lstrip("/")
+        if p:
+            paths.append(p)
+
+MAPS = {f"{i:03d}_" + p.replace("/", "_"): p for i, p in enumerate(paths, 1)}
+MAPS["default"] = "objekte/grundbuchplan"
+map_id = test('hoehen')
+
+
+
+def _norm(s: str) -> str:
+    return (s or "").casefold().replace("ä","ae").replace("ö","oe").replace("ü","ue").replace("ß","ss")
+def choose_map_id(hint: str, maps: dict) -> str:
+    hint_n = _norm(hint)
+    synonyms = ["hoehen","hoehe","hoehenmodell","hoehenkarte","terrain","dtm","dom","elevation","relief"]
+    keys = list(maps.keys())
+    vals = list(maps.values())
+
+    cand = []
+    for k,v in zip(keys, vals):
+        kv = _norm(k+" "+v)
+        score = 0
+        if any(w in kv for w in synonyms): score += 5
+        if any(w in _norm(v) for w in synonyms): score += 3
+        if any(w in _norm(k) for w in synonyms): score += 2
+        if hint_n in kv: score += 1
+        if score>0: cand.append((score, v))
+    if cand:
+        cand.sort(key=lambda x: (-x[0], x[1]))
+        return cand[0][1]
+    return maps.get("default","objekte/grundbuchplan")
+
+print(choose_map_id('boden',MAPS))

@@ -254,7 +254,27 @@ class WebmapURLBuilder:
         elif any(w in t for w in ["höhe", "hoehe","hoehen" "terrain", "dtm", "dom"]): return "hoehen"
         else: return "objekte/grundbuchplan"
 
-    
+    def _norm(self,s: str) -> str:
+        return (s or "").casefold().replace("ä","ae").replace("ö","oe").replace("ü","ue").replace("ß","ss")
+    def choose_map_id(self,hint: str, maps: dict) -> str:
+        hint_n = self._norm(hint)
+        synonyms = ["hoehen","hoehe","hoehenmodell","hoehenkarte","terrain","dtm","dom","elevation","relief"]
+        keys = list(maps.keys())
+        vals = list(maps.values())
+
+        cand = []
+        for k,v in zip(keys, vals):
+            kv = self._norm(k+" "+v)
+            score = 0
+            if any(w in kv for w in synonyms): score += 5
+            if any(w in self._norm(v) for w in synonyms): score += 3
+            if any(w in self._norm(k) for w in synonyms): score += 2
+            if hint_n in kv: score += 1
+            if score>0: cand.append((score, v))
+        if cand:
+            cand.sort(key=lambda x: (-x[0], x[1]))
+            return cand[0][1]
+        return maps.get("default","objekte/grundbuchplan")
     def build_url(
         self, 
         map_theme: str = 'default',
@@ -275,10 +295,12 @@ class WebmapURLBuilder:
         Returns:
             Complete webmap URL
         """
-        map_id = self.get_map_for_dataset(map_theme)
+        print(map_theme)
+        map_id = self.choose_map_id(map_theme,self.MAPS)
+        
         print(map_id)
-        map_path = self.MAPS.get(map_id, self.MAPS['default'])
-        url = f"{self.BASE_URL}/{map_path}"
+     
+        url = f"{self.BASE_URL}/{map_id}"
         
         params = []
         
@@ -454,7 +476,7 @@ if __name__ == "__main__":
     coords = toolkit.location_finder.get_coordinates("Bahnhof Luzern")
     if coords:
         x, y = coords
-        url = toolkit.webmap_builder.build_url('hoehen', x, y, zoom=4515)
+        url = toolkit.webmap_builder.build_url('boden', x, y, zoom=4515)
         print(f"  URL: {url}")
     
     # Test enrichment
