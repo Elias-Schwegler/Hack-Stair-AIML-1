@@ -25,13 +25,25 @@ Geopard is an AI-powered assistant that helps users find, understand, and access
 
 ## 🚀 Quick Start
 
-### 1. Prerequisites
+### Option 1: Docker (Recommended for Windows)
 
-- Python 3.10+
-- Azure OpenAI API access
-- Azure AI Search instance
+**Prerequisites:** Docker Desktop installed
 
-### 2. Setup
+```bash
+# Windows
+start-docker.bat
+
+# Linux/macOS
+./start-docker.sh
+```
+
+Then open http://localhost:8000 in your browser.
+
+👉 **See [DOCKER.md](DOCKER.md) for complete Docker documentation**
+
+### Option 2: Native Python Setup
+
+**Prerequisites:** Python 3.10+, Azure OpenAI & Search access
 
 ```bash
 # Clone repository
@@ -43,17 +55,14 @@ cp .env.example .env
 
 # Edit .env with your credentials
 nano .env
-```
 
-### 3. Start Web Server
-
-```bash
+# Start web server
 ./start_server.sh
 ```
 
 Then open http://localhost:8000 in your browser.
 
-### 4. Or Use MCP Server (for Claude Desktop)
+### Option 3: MCP Server (for Claude Desktop)
 
 Add to your Claude Desktop config (`~/.config/Claude/claude_desktop_config.json`):
 
@@ -147,6 +156,7 @@ The system provides 8 MCP tools:
 
 ## 📚 Documentation
 
+- **[DOCKER.md](DOCKER.md)** - Docker deployment guide (all platforms)
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - Technical architecture and design
 - **[frontend/README.md](frontend/README.md)** - Web server setup and usage
 - **[backend/README.md](backend/README.md)** - RAG system details
